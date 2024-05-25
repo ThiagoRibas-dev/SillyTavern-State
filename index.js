@@ -1,180 +1,112 @@
-// The main script for the extension
-// The following are examples of some basic extension functionality
+import { Generate, eventSource, event_types, saveSettingsDebounced } from "../../../../script.js";
+import { extension_settings, getContext } from "../../../extensions.js";
+export { MODULE_NAME };
 
-//You'll likely need to import extension_settings, getContext, and loadExtensionSettings from extensions.js
-import { extension_settings, getContext, loadExtensionSettings } from "../../../extensions.js";
+const extensionName = "Extension-State";
+const extensionFolderPath = `scripts/extensions/third-party/${extensionName}`;
 
-//You'll likely need to import some other functions from the main script
-import { saveSettingsDebounced } from "../../../../script.js";
+const MODULE_NAME = 'State';
+const DEBUG_PREFIX = "<State extension> ";
 
-import {
-  eventSource,
-  event_types,
-  generateQuietPrompt, saveSettingsDebounced, substituteParams
-} from '../../../../script.js';
-import { getContext } from '../../../extensions.js';
+let enforcing = "";
 
-const MODULE_NAME = 'StatePrompts';
-// Keep track of where your extension is located, name should match repo name
-const extensionName = "st-extension-state";
-const extensionSettings = extension_settings[extensionName];
-const defaultSettings = {};
+//#############################//
+//  Extension UI and Settings  //
+//#############################//
 
-let records = [];
-let lastSystemMessages = {};
+const defaultSettings = {
+    enabled: false,
+    expected: "",
+    continue_prefix: "",
+    max_try: 1
+}
 
-//###############################//
-//#       Event Handling        #//
-//###############################//
+function loadSettings() {
+    if (extension_settings.State === undefined)
+        extension_settings.State = {};
 
-eventSource.addEventListener(event_types.MESSAGE_RECEIVED, async (event) => {
-    await handleNewMessage(event);
-});
-
-async function handleNewMessage(event) {
-    const context = getContext();
-    for (const record of records) {
-        const prompt = substituteParams(record.prompt);
-        context.setExtensionPrompt(MODULE_NAME, prompt);
-        const response = await generateQuietPrompt(prompt);
-        addSystemMessage(record.id, response);
+    if (Object.keys(extension_settings.State).length != Object.keys(defaultSettings).length) {
+        Object.assign(extension_settings.State, defaultSettings)
     }
+
+    $("state_enabled").prop('checked', extension_settings.State.enabled);
+    $("state_expected").val(extension_settings.State.expected);
+    $("state_continue_prefix").val(extension_settings.State.continue_prefix);
 }
 
-//###############################//
-//#       System Messages       #//
-//###############################//
-
-function addSystemMessage(recordId, messageContent) {
-    const chatContainer = $('#chat-container');
-    if (lastSystemMessages[recordId]) {
-        lastSystemMessages[recordId].remove();
-    }
-    const systemMessage = $('<div></div>').addClass('system-message').text(messageContent);
-    chatContainer.append(systemMessage);
-    lastSystemMessages[recordId] = systemMessage;
-}
-
-//###############################//
-//#       Record Handling       #//
-//###############################//
-
-function addRecord(prompt, messageCount) {
-    const record = {
-        id: records.length + 1,
-        prompt,
-        messageCount,
-    };
-    records.push(record);
-    saveState();
-    updateUiRecordList();
-}
-
-function removeRecord(recordId) {
-    records = records.filter(record => record.id !== recordId);
-    delete lastSystemMessages[recordId];
-    saveState();
-    updateUiRecordList();
-}
-
-function updateRecord(recordId, prompt, messageCount) {
-    const record = records.find(record => record.id === recordId);
-    if (record) {
-        record.prompt = prompt;
-        record.messageCount = messageCount;
-        saveState();
-        updateUiRecordList();
-    }
-}
-
-//###############################//
-//#         UI Handling         #//
-//###############################//
-
-function updateUiRecordList() {
-    const recordList = $('#prompt-record-list');
-    recordList.empty();
-    for (const record of records) {
-        const recordElement = $('<li></li>').text(`Prompt: ${record.prompt}, Messages: ${record.messageCount}`);
-        recordList.append(recordElement);
-    }
-}
-
-//###############################//
-//#       State Handling        #//
-//###############################//
-
-function loadState() {
-    try {
-        const stateString = $('#prompt-evaluator-save-state').val();
-        if (stateString.trim() === '') return;
-        const savedState = JSON.parse(stateString);
-        records = savedState.records || [];
-        lastSystemMessages = savedState.lastSystemMessages || {};
-        updateUiRecordList();
-        console.info('Loaded prompt evaluator state from textarea');
-    } catch (e) {
-        console.error('Failed to load prompt evaluator state', e);
-    }
-}
-
-function saveState() {
-    $('#prompt-evaluator-save-state').val(JSON.stringify({
-        records,
-        lastSystemMessages,
-    }));
+async function onEnabledClick() {
+    extension_settings.State.enabled = $('state_enabled').is(':checked');
     saveSettingsDebounced();
 }
 
-//###############################//
-//#       UI Event Listeners     #//
-//###############################//
-
-$('#add-prompt-record').on('click', () => {
-    const prompt = $('#prompt-evaluator-prompt').val();
-    const messageCount = $('#prompt-evaluator-message-count').val();
-    addRecord(prompt, messageCount);
-});
-
- 
-// Loads the extension settings if they exist, otherwise initializes them to the defaults.
-async function loadSettings() {
-  //Create the settings if they don't exist
-  extension_settings[extensionName] = extension_settings[extensionName] || {};
-  if (Object.keys(extension_settings[extensionName]).length === 0) {
-    Object.assign(extension_settings[extensionName], defaultSettings);
-  }
-
-  // Updating settings in the UI
-  $("#example_setting").prop("checked", extension_settings[extensionName].example_setting).trigger("input");
+async function onExpectedChange() {
+    extension_settings.State.expected = $('state_expected').val();
+    saveSettingsDebounced();
 }
 
-jQuery(async () => {
-  //###############################//
-  //#         UI Elements         #//
-  //###############################//
-  const settingsHtml = `
-  <div id="prompt-evaluator-panel">
-      <h3>Prompt Evaluator</h3>
-      <div>
-          <label for="prompt-evaluator-prompt">Prompt:</label>
-          <input type="text" id="prompt-evaluator-prompt">
-      </div>
-      <div>
-          <label for="prompt-evaluator-message-count">Message Count:</label>
-          <input type="number" id="prompt-evaluator-message-count" min="1">
-      </div>
-      <button id="add-prompt-record">Add Record</button>
-      <ul id="prompt-record-list"></ul>
-      <textarea id="prompt-evaluator-save-state" style="display: none;"></textarea>
-  </div>
-  `;
-  
-  // Append settingsHtml to extensions_settings
-  // extension_settings and extensions_settings2 are the left and right columns of the settings menu
-  // Left should be extensions that deal with system functions and right should be visual/UI related 
-  $("#extensions_settings").append(settingsHtml);
+async function onContinuePrefixChange() {
+    extension_settings.State.continue_prefix = $('state_continue_prefix').val();
+    saveSettingsDebounced();
+}
 
-  // Load settings when starting things up (if you have any)
-  loadSettings();
+async function StateText(chat_id) {
+    if (!extension_settings.State.enabled)
+        return;
+
+    const context = getContext();
+
+    // group mode not compatible
+    if (context.groupId != null) {
+        console.debug(DEBUG_PREFIX,"Group mode detected, not compatible, abort State.");
+        //toastr.warning("Not compatible with group mode.", DEBUG_PREFIX + " disabled", { timeOut: 10000, extendedTimeOut: 20000, preventDuplicates: true });
+        return;
+    }
+    
+    console.debug(DEBUG_PREFIX, extension_settings.State);
+
+    const expected = extension_settings.State.expected
+    let last_message = getContext().chat[chat_id].mes;
+    
+    console.debug(DEBUG_PREFIX, "Message received:",last_message);
+
+    if (expected == "") {
+        console.debug(DEBUG_PREFIX, "expected is empty, nothing to State");
+        return;
+    }
+
+    if (last_message.includes(expected)) {
+        console.debug(DEBUG_PREFIX, "expected text found, nothing to do.");
+        return;
+    }
+
+    if (enforcing == last_message) {
+        console.debug(DEBUG_PREFIX, "Already attempted to State, nothing to do");
+        enforcing = "";
+        return;
+    }
+    
+    console.debug(DEBUG_PREFIX, "expected text not found injecting prefix and calling continue");
+    enforcing = last_message + extension_settings.State.continue_prefix
+    getContext().chat[chat_id].mes = enforcing;
+    //$("#option_continue").trigger('click'); // To allow catch by blip extension
+    await Generate("continue");
+}
+
+
+//#############################//
+//  Extension load             //
+//#############################//
+
+// This function is called when the extension is loaded
+jQuery(async () => {
+    const windowHtml = $(await $.get(`${extensionFolderPath}/window.html`));
+
+    $('#extensions_settings').append(windowHtml);
+    loadSettings();
+
+    $("state_enabled").on("click", onEnabledClick);
+    $("state_expected").on("change", onExpectedChange);
+    $("state_continue_prefix").on("change", onContinuePrefixChange);
+
+    eventSource.on(event_types.MESSAGE_RECEIVED, (chat_id) => StateText(chat_id));
 });
