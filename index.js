@@ -2,8 +2,7 @@ import { Generate, eventSource, event_types, saveSettingsDebounced } from "../..
 import { extension_settings, getContext } from "../../../extensions.js";
 export { MODULE_NAME };
 
-const extensionName = "Extension-State";
-const extensionFolderPath = `scripts/extensions/third-party/${extensionName}`;
+const extensionName = "SillyTavern-State";
 
 const MODULE_NAME = 'State';
 const DEBUG_PREFIX = "<State extension> ";
@@ -49,7 +48,7 @@ async function onContinuePrefixChange() {
     saveSettingsDebounced();
 }
 
-async function StateText(chat_id) {
+async function processStateText(chat_id) {
     if (!extension_settings.State.enabled)
         return;
 
@@ -96,11 +95,8 @@ async function StateText(chat_id) {
 //#############################//
 //  Extension load             //
 //#############################//
-
-// This function is called when the extension is loaded
 jQuery(async () => {
-    const windowHtml = $(await $.get(`${extensionFolderPath}/window.html`));
-
+    const windowHtml = $(await $.get(`./window.html`));
     $('#extensions_settings').append(windowHtml);
     loadSettings();
 
@@ -108,5 +104,5 @@ jQuery(async () => {
     $("state_expected").on("change", onExpectedChange);
     $("state_continue_prefix").on("change", onContinuePrefixChange);
 
-    eventSource.on(event_types.MESSAGE_RECEIVED, (chat_id) => StateText(chat_id));
+    eventSource.on(event_types.MESSAGE_RECEIVED, (chat_id) => processStateText(chat_id));
 });
