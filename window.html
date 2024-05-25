@@ -10,17 +10,15 @@
                     <input type="checkbox" id="state_enabled" name="state_enabled">
                     <small>Enabled</small>
                 </label>
+                <br>
+                <label class="checkbox_label" for="sp--set-new">
+                    <div class="sp--add menu_button menu_button_icon fa-solid fa-plus" id="sp--set-new"
+                        name="sp--set-new" title="Create new state prompt"></div>
+                        Add new Prompt
+                </label>
             </div>
-            <div>
-                <label for="state_expected">Expected text</label>
-                <textarea id="state_expected" placeholder="(text that should appear)" class="text_pole widthUnset flex1" rows="2" style="height: 28px;"></textarea>
-                    
-                <label for="state_continue_prefix">Continue prefix</label>
-                <textarea id="state_continue_prefix" placeholder="(text prefixed to continue)" class="text_pole widthUnset flex1" rows="2" style="height: 28px;"></textarea>
-            </div>
-            <div>
-               
-            </div>
+            <ol id="state-prompt-set">
+            </ol>
         </div>
     </div>
 </div>

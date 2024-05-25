@@ -3,70 +3,93 @@ import { extension_settings, getContext } from "../../../extensions.js";
 export { MODULE_NAME };
 
 const extensionName = "SillyTavern-State";
-
+const extensionFolderPath = `scripts/extensions/third-party/${extensionName}`;
 const MODULE_NAME = 'State';
 const DEBUG_PREFIX = "<State extension> ";
-
-let enforcing = "";
 
 //#############################//
 //  Extension UI and Settings  //
 //#############################//
+function loadSettings(chatId) {
+    console.log(DEBUG_PREFIX, `Loading ${chatId}`);
 
-const defaultSettings = {
-    enabled: false,
-    expected: "",
-    continue_prefix: "",
-    max_try: 1
-}
-
-function loadSettings() {
-    if (extension_settings.State === undefined)
-        extension_settings.State = {};
-
-    if (Object.keys(extension_settings.State).length != Object.keys(defaultSettings).length) {
-        Object.assign(extension_settings.State, defaultSettings)
+    if (!extension_settings[MODULE_NAME][chatId]) {
+        extension_settings[MODULE_NAME][chatId] = {
+            enabled: false,
+            prompts: [],
+        };
     }
 
-    $("state_enabled").prop('checked', extension_settings.State.enabled);
-    $("state_expected").val(extension_settings.State.expected);
-    $("state_continue_prefix").val(extension_settings.State.continue_prefix);
+    const li = $('#state-prompt-set');
+    const se = $("state_enabled");
+    const add = $("#sp--set-new");
+
+    if (!chatId) {
+        //clear on load
+        li.html('');
+        se.prop('checked', false);
+        return;
+    }
+    
+    se.prop('checked', extension_settings[MODULE_NAME][chatId].enabled);
+    se.on("click", () => { onEnabledClick(chatId) });
+    add.on("click", () => { onAddNew(li, chatId); });
+    
+    console.log(DEBUG_PREFIX, 'AAAAAAAAAAAAAAAAA', MODULE_NAME, chatId, extension_settings[MODULE_NAME][chatId]);
+    const prompts = extension_settings[MODULE_NAME][chatId].prompts;
+    for(var k in prompts){
+        onAddNew(li, prompts[k]);
+    }
 }
 
-async function onEnabledClick() {
-    extension_settings.State.enabled = $('state_enabled').is(':checked');
+async function onEnabledClick(chatId) {
+    extension_settings[MODULE_NAME][chatId].enabled = $('state_enabled').is(':checked');
     saveSettingsDebounced();
 }
 
-async function onExpectedChange() {
-    extension_settings.State.expected = $('state_expected').val();
+async function savePrompt(chatId) {
+    const prompts = [];
+    const values = $('.state-prompt-area').toArray();
+    for(var k in values){
+        const value = values[k].value.trim();
+        console.log(DEBUG_PREFIX, 'VALUE', value, values[k]);
+        if(value){
+            prompts[k] = value;
+        }
+    }
+    extension_settings[MODULE_NAME][chatId].prompts = prompts;
     saveSettingsDebounced();
+
+    console.log(DEBUG_PREFIX, `Saved ${extension_settings[MODULE_NAME][chatId].prompts}`);
 }
 
-async function onContinuePrefixChange() {
-    extension_settings.State.continue_prefix = $('state_continue_prefix').val();
-    saveSettingsDebounced();
+async function onAddNew(li, chatId, value = '') {
+    const count = li.children().length;
+    li.append(`<li style="width: 100%;"><textarea id="${count}-state-area" class="state-prompt-area" placeholder="(Prompt sent to probe the current state)" class="text_pole widthUnset flex1" rows="2">${value}</textarea><div class="menu_button menu_button_icon fa-solid fa-trash-can redWarningBG" title="Remove"></div></li>`);
+    $(`#${count}-state-area`).on('change', () => { savePrompt(chatId) });
+
+    console.log(DEBUG_PREFIX, `Added, {count} {value}`);
 }
 
 async function processStateText(chat_id) {
-    if (!extension_settings.State.enabled)
+    if (!chat_id || !extension_settings[MODULE_NAME][chatId].enabled)
         return;
 
     const context = getContext();
 
     // group mode not compatible
     if (context.groupId != null) {
-        console.debug(DEBUG_PREFIX,"Group mode detected, not compatible, abort State.");
+        console.debug(DEBUG_PREFIX, "Group mode detected, not compatible, abort State.");
         //toastr.warning("Not compatible with group mode.", DEBUG_PREFIX + " disabled", { timeOut: 10000, extendedTimeOut: 20000, preventDuplicates: true });
         return;
     }
-    
-    console.debug(DEBUG_PREFIX, extension_settings.State);
 
-    const expected = extension_settings.State.expected
+    console.debug(DEBUG_PREFIX, extension_settings[MODULE_NAME][chatId]);
+
+    const expected = extension_settings[MODULE_NAME][chatId].expected
     let last_message = getContext().chat[chat_id].mes;
-    
-    console.debug(DEBUG_PREFIX, "Message received:",last_message);
+
+    console.debug(DEBUG_PREFIX, "Message received:", last_message);
 
     if (expected == "") {
         console.debug(DEBUG_PREFIX, "expected is empty, nothing to State");
@@ -83,26 +106,23 @@ async function processStateText(chat_id) {
         enforcing = "";
         return;
     }
-    
+
     console.debug(DEBUG_PREFIX, "expected text not found injecting prefix and calling continue");
-    enforcing = last_message + extension_settings.State.continue_prefix
+    enforcing = last_message + extension_settings[MODULE_NAME][chatId].continue_prefix
     getContext().chat[chat_id].mes = enforcing;
     //$("#option_continue").trigger('click'); // To allow catch by blip extension
     await Generate("continue");
 }
 
-
 //#############################//
 //  Extension load             //
 //#############################//
 jQuery(async () => {
-    const windowHtml = $(await $.get(`./window.html`));
+    console.log(DEBUG_PREFIX, 'loading', extension_settings[MODULE_NAME]);
+
+    const windowHtml = $(await $.get(`${extensionFolderPath}/window.html`));
     $('#extensions_settings').append(windowHtml);
-    loadSettings();
 
-    $("state_enabled").on("click", onEnabledClick);
-    $("state_expected").on("change", onExpectedChange);
-    $("state_continue_prefix").on("change", onContinuePrefixChange);
-
+    eventSource.on(event_types.CHAT_CHANGED, (chat_id) => loadSettings(chat_id));
     eventSource.on(event_types.MESSAGE_RECEIVED, (chat_id) => processStateText(chat_id));
 });
