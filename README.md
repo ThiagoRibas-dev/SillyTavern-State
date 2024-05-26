@@ -5,4 +5,5 @@ TODO:
  - Change the configuration so that it's saved for each Character instead of each individual Chat;
  - Add an insertion template field;
  - Implement a keyword system, where the User can assign keywords to each prompt and those prompts will only trigger in case the last N messages contain said keywords (like a lorebook);
+ - Add an option to choose between adding the results of each prompt as individual messages (as is now) and appending the results to the character's last message;
  - Fix the UI;
