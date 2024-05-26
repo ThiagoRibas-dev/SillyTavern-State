@@ -6,4 +6,5 @@ TODO:
  - Add an insertion template field;
  - Implement a keyword system, where the User can assign keywords to each prompt and those prompts will only trigger in case the last N messages contain said keywords (like a lorebook);
  - Add an option to choose between adding the results of each prompt as individual messages (as is now) and appending the results to the character's last message;
+ - Add an easy way to run an specific state prompt or all state prompts, either by adding a toolbar to the UI or by adding a temporary slash command;
  - Fix the UI;
