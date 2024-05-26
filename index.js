@@ -13,14 +13,7 @@ let CHAT_ID = null;
 //#############################//
 function loadSettings(chatId) {
     console.log(DEBUG_PREFIX, `Loading ${chatId}`);
-
-    if (!extension_settings[MODULE_NAME][chatId]) {
-        extension_settings[MODULE_NAME][chatId] = {
-            enabled: false,
-            prompts: [],
-        };
-    }
-
+    
     const li = $('#state-prompt-set');
     const se = $("#state_enabled");
     const add = $("#sp--set-new");
@@ -30,6 +23,13 @@ function loadSettings(chatId) {
     li.html('');
     se.prop('checked', false);
     lbl.empty();
+
+    if (!extension_settings[MODULE_NAME][chatId]) {
+        extension_settings[MODULE_NAME][chatId] = {
+            enabled: false,
+            prompts: [],
+        };
+    }
 
     if (!chatId) {
         return;
@@ -97,13 +97,11 @@ async function processStateText() {
                 toastr.info(`State Extension. Sending prompt : ${prmpt}`);
 
                 const id = `State prompt ${k}`;
-                removeObjectFromArray(chat, "name", id);
-                context.saveChat();
+                // removeObjectFromArray(chat, "state_extension_id", id);
 
                 const resp = await context.generateQuietPrompt(prmpt);
-                const message = { "name": id, "is_user": false, "is_system": true, "is_state_extension": true, "send_date": new Date().toString(), "mes": resp, "extra": { "isSmallSys": true } };
+                const message = { "name": "System", "is_user": false, "is_system": false, "state_extension_id": id, "send_date": new Date().toString(), "mes": resp, "extra": { "isSmallSys": true } };
                 console.log(DEBUG_PREFIX, 'Adding Message', message);
-                // sendMessageAs(message, resp);
                 chat.push(message);
                 context.addOneMessage(message);
                 await eventSource.emit(event_types.CHARACTER_MESSAGE_RENDERED, (chat.length - 1));
