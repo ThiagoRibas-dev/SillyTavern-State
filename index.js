@@ -1,4 +1,4 @@
-import { Generate, eventSource, event_types, saveSettingsDebounced } from "../../../../script.js";
+import { eventSource, event_types, saveSettingsDebounced, saveChatConditional } from "../../../../script.js";
 import { extension_settings, getContext } from "../../../extensions.js";
 export { MODULE_NAME };
 
@@ -6,6 +6,7 @@ const extensionName = "SillyTavern-State";
 const extensionFolderPath = `scripts/extensions/third-party/${extensionName}`;
 const MODULE_NAME = 'State';
 const DEBUG_PREFIX = "<State extension> ";
+let CHAT_ID = null;
 
 //#############################//
 //  Extension UI and Settings  //
@@ -21,97 +22,135 @@ function loadSettings(chatId) {
     }
 
     const li = $('#state-prompt-set');
-    const se = $("state_enabled");
+    const se = $("#state_enabled");
     const add = $("#sp--set-new");
+    const lbl = $('#state_label_current_chat');
+
+    //clear on load
+    li.html('');
+    se.prop('checked', false);
+    lbl.empty();
 
     if (!chatId) {
-        //clear on load
-        li.html('');
-        se.prop('checked', false);
         return;
     }
-    
+
+    CHAT_ID = chatId;
+
     se.prop('checked', extension_settings[MODULE_NAME][chatId].enabled);
     se.on("click", () => { onEnabledClick(chatId) });
     add.on("click", () => { onAddNew(li, chatId); });
-    
-    console.log(DEBUG_PREFIX, 'AAAAAAAAAAAAAAAAA', MODULE_NAME, chatId, extension_settings[MODULE_NAME][chatId]);
+    lbl.text(`Prompts for chat "${chatId}"`);
+
     const prompts = extension_settings[MODULE_NAME][chatId].prompts;
-    for(var k in prompts){
-        onAddNew(li, prompts[k]);
+    for (var k in prompts) {
+        onAddNew(li, chatId, prompts[k]);
     }
 }
 
 async function onEnabledClick(chatId) {
-    extension_settings[MODULE_NAME][chatId].enabled = $('state_enabled').is(':checked');
+    extension_settings[MODULE_NAME][chatId].enabled = $('#state_enabled').is(':checked');
     saveSettingsDebounced();
 }
 
 async function savePrompt(chatId) {
     const prompts = [];
     const values = $('.state-prompt-area').toArray();
-    for(var k in values){
+    for (var k in values) {
         const value = values[k].value.trim();
-        console.log(DEBUG_PREFIX, 'VALUE', value, values[k]);
-        if(value){
+        if (value) {
             prompts[k] = value;
         }
     }
+
     extension_settings[MODULE_NAME][chatId].prompts = prompts;
     saveSettingsDebounced();
+}
 
-    console.log(DEBUG_PREFIX, `Saved ${extension_settings[MODULE_NAME][chatId].prompts}`);
+async function removePrompt(elId) {
+    $(elId).remove();
+    saveSettingsDebounced();
 }
 
 async function onAddNew(li, chatId, value = '') {
     const count = li.children().length;
-    li.append(`<li style="width: 100%;"><textarea id="${count}-state-area" class="state-prompt-area" placeholder="(Prompt sent to probe the current state)" class="text_pole widthUnset flex1" rows="2">${value}</textarea><div class="menu_button menu_button_icon fa-solid fa-trash-can redWarningBG" title="Remove"></div></li>`);
-    $(`#${count}-state-area`).on('change', () => { savePrompt(chatId) });
+    li.append(`<li id="${count}-state-area-li" style="width: 100%;"><textarea id="${count}-state-area" class="state-prompt-area" placeholder="(Prompt sent to probe the current state)" class="text_pole widthUnset flex1" rows="2">${value}</textarea><div id="${count}-state-area-remove" class="menu_button menu_button_icon fa-solid fa-trash-can redWarningBG" title="Remove"></div></li>`);
 
-    console.log(DEBUG_PREFIX, `Added, {count} {value}`);
+    $(`#${count}-state-area`).on('change', () => { savePrompt(chatId); });
+    $(`#${count}-state-area-remove`).on('click', () => { removePrompt(`#${count}-state-area-li`); });
 }
 
-async function processStateText(chat_id) {
-    if (!chat_id || !extension_settings[MODULE_NAME][chatId].enabled)
+async function processStateText() {
+    const chatId = CHAT_ID;
+    console.debug(DEBUG_PREFIX, 'processStateText', chatId);
+
+    if (!chatId || !extension_settings[MODULE_NAME][chatId].enabled)
         return;
 
-    const context = getContext();
+    try {
+        const context = getContext();
+        const prompts = extension_settings[MODULE_NAME][chatId].prompts;
+        const chat = getContext().chat;
+        for (var k in prompts) {
+            const prmpt = prompts[k];
+            if (prmpt) {
+                toastr.info(`State Extension. Sending prompt : ${prmpt}`);
 
-    // group mode not compatible
-    if (context.groupId != null) {
-        console.debug(DEBUG_PREFIX, "Group mode detected, not compatible, abort State.");
-        //toastr.warning("Not compatible with group mode.", DEBUG_PREFIX + " disabled", { timeOut: 10000, extendedTimeOut: 20000, preventDuplicates: true });
-        return;
+                const id = `State prompt ${k}`;
+                removeObjectFromArray(chat, "name", id);
+                context.saveChat();
+
+                const resp = await context.generateQuietPrompt(prmpt);
+                const message = { "name": id, "is_user": false, "is_system": true, "is_state_extension": true, "send_date": new Date().toString(), "mes": resp, "extra": { "isSmallSys": true } };
+                console.log(DEBUG_PREFIX, 'Adding Message', message);
+                // sendMessageAs(message, resp);
+                chat.push(message);
+                context.addOneMessage(message);
+                await eventSource.emit(event_types.CHARACTER_MESSAGE_RENDERED, (chat.length - 1));
+                await saveChatConditional();
+            }
+        }
+    } catch (error) {
+        toastr.error("State extension: Error during generation.", error);
     }
+}
 
-    console.debug(DEBUG_PREFIX, extension_settings[MODULE_NAME][chatId]);
-
-    const expected = extension_settings[MODULE_NAME][chatId].expected
-    let last_message = getContext().chat[chat_id].mes;
-
-    console.debug(DEBUG_PREFIX, "Message received:", last_message);
-
-    if (expected == "") {
-        console.debug(DEBUG_PREFIX, "expected is empty, nothing to State");
-        return;
+function removeObjectFromArray(array, key, value) {
+    const index = array.findIndex(obj => obj[key] === value);
+    if (index == -1) {
+        return array;
     }
+    array.splice(index, 1);
+    return removeObjectFromArray(array, key, value);
+}
 
-    if (last_message.includes(expected)) {
-        console.debug(DEBUG_PREFIX, "expected text found, nothing to do.");
-        return;
-    }
+async function getDate(now) {
+    // Define an array of month names
+    const monthNames = [
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
+    ];
 
-    if (enforcing == last_message) {
-        console.debug(DEBUG_PREFIX, "Already attempted to State, nothing to do");
-        enforcing = "";
-        return;
-    }
+    // Extract the components of the date
+    const month = monthNames[now.getMonth()];
+    const day = now.getDate();
+    const year = now.getFullYear();
+    let hour = now.getHours();
+    const minutes = now.getMinutes();
+    const ampm = hour >= 12 ? 'pm' : 'am';
 
-    console.debug(DEBUG_PREFIX, "expected text not found injecting prefix and calling continue");
-    enforcing = last_message + extension_settings[MODULE_NAME][chatId].continue_prefix
-    getContext().chat[chat_id].mes = enforcing;
-    //$("#option_continue").trigger('click'); // To allow catch by blip extension
-    await Generate("continue");
+    // Convert the hour to 12-hour format
+    hour = hour % 12;
+    hour = hour ? hour : 12; // the hour '0' should be '12'
+
+    // Format the minutes to always be two digits
+    const formattedMinutes = minutes < 10 ? '0' + minutes : minutes;
+
+    // Construct the formatted date string
+    const formattedDate = `${month} ${day}, ${year} ${hour}:${formattedMinutes}${ampm}`;
+
+    // Output the formatted date
+    return formattedDate;
 }
 
 //#############################//
@@ -123,6 +162,6 @@ jQuery(async () => {
     const windowHtml = $(await $.get(`${extensionFolderPath}/window.html`));
     $('#extensions_settings').append(windowHtml);
 
-    eventSource.on(event_types.CHAT_CHANGED, (chat_id) => loadSettings(chat_id));
-    eventSource.on(event_types.MESSAGE_RECEIVED, (chat_id) => processStateText(chat_id));
+    eventSource.on(event_types.CHAT_CHANGED, (chatId) => loadSettings(chatId));
+    eventSource.on(event_types.MESSAGE_RECEIVED, processStateText);
 });
