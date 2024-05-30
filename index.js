@@ -57,6 +57,7 @@ function loadSettings() {
     }
 
     updatePromptButtons(btns, chatSettings);
+    console.log(DEBUG_PREFIX, 'LOADED', chatSettings)
 }
 
 function updatePromptButtons(btns, chatSettings) {
@@ -81,7 +82,7 @@ function getBtn(k, prmpt) {
     elBtn.on('click', () => {
         console.log(DEBUG_PREFIX, 'CLICKED', prmpt);
         IS_LOADING = false;
-        sendPrompt(prompt, k);
+        sendPrompt(prmpt, k);
     });
     return divBtn;
 }
@@ -92,6 +93,7 @@ async function onEnabledClick(chatSettings) {
 }
 
 async function savePrompt(chatSettings) {
+    console.log(DEBUG_PREFIX, 'SAVE PROMPT', chatSettings);
     const prompts = [];
 
     const values = $('.state-prompt-area').toArray();
@@ -108,9 +110,6 @@ async function savePrompt(chatSettings) {
     for (var k in templates) {
         const value = templates[k].value.trim();
         if (value) {
-            if (!prompts[k]) {
-                prompts[k] = {};
-            }
             prompts[k].template = value;
         }
     }
@@ -118,32 +117,32 @@ async function savePrompt(chatSettings) {
     for (var k in checks) {
         const value = checks[k].checked;
         if (value) {
-            if (!checks[k]) {
-                checks[k] = {};
-            }
-            checks[k].isSmall = value;
+            prompts[k].isSmall = value;
         }
     }
 
     chatSettings.prompts = prompts;
+    console.log(DEBUG_PREFIX, 'SAVED', chatSettings);
     saveSettingsDebounced();
 }
 
-async function onAddNew(li, btns, chatSettings, prmpt = {}) {
+async function onAddNew(li, btns, chatSettings, prmpt = {prompt: "", template: "{{state}}", isSmall: true}) {
+    console.log(DEBUG_PREFIX, 'ADD NEW', prmpt);
     const els = li.children()?.length || 0;
     const prmptTitle = "Prompt sent to probe the current state";
-    const templTitle = "Template of the message that will be added. The placeholder \${response} will be replaced with the Ai's response.";
-    const smallTitle = "If checked, the reply to the sent prompt will be added as a \"small system message\" instead of a full chat message."
+    const templTitle = "Template of the message that will be added. The placeholder {{state}} will be replaced with the Ai's response.";
+    const smallTitle = 'If checked, the reply to the sent prompt will be added as a "small system message" instead of a full chat message.';
 
-    const promptArea = $(`<textarea class="state-prompt-area" placeholder="(${prmptTitle})" title="${prmptTitle}" class="text_pole widthUnset flex1" rows="2">${prmpt.prompt || ""}</textarea>`);
-    const templateArea = $(`<textarea class="state-template-area" placeholder="(${templTitle})" title="${templTitle}" class="text_pole widthUnset flex1" rows="2">${prmpt.template || "${response}"}</textarea>`);
-    const smallCheck = $(`<label class="checkbox_label" for="is_small${els}"><small>Is Small Reply?</small><input type="checkbox" class="state-issmall-check" title="${smallTitle}" name="is_small${els}" checked="true"/></label>`);
+    const promptArea = $(`<textarea class="state-prompt-area" placeholder="(${prmptTitle})" title="${prmptTitle}" class="text_pole widthUnset flex1" rows="2">${prmpt.prompt}</textarea>`);
+    const templateArea = $(`<textarea class="state-template-area" placeholder="(${templTitle})" title="${templTitle}" class="text_pole widthUnset flex1" rows="2">${prmpt.template}</textarea>`);
+    const smallCheck = $(`<input type="checkbox" class="state-issmall-check" title="${smallTitle}" name="is_small${els}" ${prmpt.isSmall ? "checked" : ""}/>`);
+    const smallCheckLbl = $(`<label class="checkbox_label" for="is_small${els}"><small>Is Small Reply?</small></label>`);
 
+    const rmvBtn = $(`<div class="menu_button menu_button_icon fa-solid fa-trash-can redWarningBG" title="Remove"></div>`);
+    const liEl = $(`<li style="width: 100%; border: 1px grey solid; border-radius: 2px; margin-botom: 2px;" ></li>`)
 
-    const rmvBtn = $(`<div class="menu_button menu_button_icon fa-solid fa-trash-can redWarningBG" style="" title="Remove"></div>`);
-    const liEl = $(`<li style="width: 100%;"></li>`)
-
-    smallCheck.prop('checked', prmpt.isSmall || true);
+    smallCheck.prop('checked', prmpt.isSmall);
+    smallCheck.attr('checked', prmpt.isSmall);
 
     promptArea.on('change', () => {
         savePrompt(chatSettings);
@@ -160,13 +159,13 @@ async function onAddNew(li, btns, chatSettings, prmpt = {}) {
     rmvBtn.on('click', () => {
         liEl.remove();
         savePrompt(chatSettings);
-        saveSettingsDebounced();
         updatePromptButtons(btns, chatSettings);
     });
 
     liEl.append(promptArea);
     liEl.append(templateArea);
-    liEl.append(smallCheck);
+    smallCheckLbl.append(smallCheck);
+    liEl.append(smallCheckLbl);
     liEl.append(rmvBtn);
     li.append(liEl);
 }
@@ -195,17 +194,18 @@ async function processStateText() {
         }
     } catch (error) {
         toastr.error("State extension: Error during generation.");
-        console.log(DEBUG_PREFIX, error);
+        console.error(DEBUG_PREFIX, error);
     }
     IS_GENERATING = false;
 }
 
 async function sendPrompt(prmpt, k) {
+    console.log(DEBUG_PREFIX, 'sendPrompt', prmpt, k);
     if (prmpt && prmpt.prompt) {
         const chat = getContext().chat;
         const id = `State prompt ${k}`;
         const template = prmpt.template;
-        var value = prmpt.prompt;
+        const value = prmpt.prompt;
 
         toastr.info(`State Extension. Sending Prompt : ${value}`);
         console.log(`State Extension. Sending Prompt : ${value} / Template : ${template} / IsSmal : ${prmpt.isSmall}`);
@@ -214,11 +214,11 @@ async function sendPrompt(prmpt, k) {
         // await eventSource.emit(event_types.CHARACTER_MESSAGE_RENDERED, (chat.length - 1));
         // await saveChatConditional();
 
-        if (template) {
-            value = template.replace('${response}', value);
+        var resp = await getContext().generateQuietPrompt(value);
+        if (resp) {
+            resp = template.replace('{{state}}', resp);
+            console.log(DEBUG_PREFIX, 'sendPrompt apply template', resp);
         }
-
-        const resp = await getContext().generateQuietPrompt(value);
         const message = { "name": "System", "is_user": false, "is_system": false, "state_extension_id": id, "send_date": new Date().toString(), "mes": resp, "extra": { "isSmallSys": prmpt.isSmall } };
         console.log(DEBUG_PREFIX, 'Adding Message', message);
 
@@ -246,10 +246,12 @@ jQuery(async () => {
     const windowHtml = $(await $.get(`${EXTENSION_FOLDER_PATH}/window.html`));
     $('#extensions_settings').append(windowHtml);
 
+    //IS_LOADING is used to ensure that the prompts won't be triggered when changing chats or characters, since that somehow triggers the MESSAGE_RECEIVED event, which is odd in my opnion
     eventSource.on(event_types.MESSAGE_SENT, () => { IS_LOADING = true });
     eventSource.on(event_types.MESSAGE_SWIPED, () => { IS_LOADING = true });
     eventSource.on(event_types.GENERATION_STARTED, () => { IS_LOADING = true });
     eventSource.on(event_types.GENERATION_ENDED, () => { IS_LOADING = false });
+    eventSource.on(event_types.MESSAGE_DELETED, () => { setTimeout(loadSettings, 1000) });
     eventSource.on(event_types.CHAT_CHANGED, () => { setTimeout(loadSettings, 1000) });
     eventSource.on(event_types.MESSAGE_RECEIVED, () => { setTimeout(() => { processStateText() }, 500); });
 });
