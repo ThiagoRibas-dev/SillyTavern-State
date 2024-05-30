@@ -6,18 +6,21 @@ const EXTENSION_NAME = "SillyTavern-State";
 const EXTENSION_FOLDER_PATH = `scripts/extensions/third-party/${EXTENSION_NAME}`;
 const MODULE_NAME = 'State';
 const DEBUG_PREFIX = "<State extension> ";
-const CONTEXT = getContext();
 
-let CHAT_ID = null;
+let CHAR_ID = null;
 let IS_LOADING = true;
 let IS_GENERATING = false;
 
 //#############################//
 //  Extension UI and Settings  //
 //#############################//
-function loadSettings(chatId) {
+function loadSettings() {
+    const charId = SillyTavern.getContext().characterId;
+    const charName = SillyTavern.getContext().characters[charId].name;
+    CHAR_ID = `${charName}(${charId})`;
+
     IS_LOADING = true;
-    console.log(DEBUG_PREFIX, `Loading ${chatId}`);
+    console.log(DEBUG_PREFIX, `Loading ${CHAR_ID}`);
 
     const li = $('#state-prompt-set');
     const se = $("#state_enabled");
@@ -28,27 +31,25 @@ function loadSettings(chatId) {
     li.html('');
     se.prop('checked', false);
     lbl.empty();
-    if (!extension_settings[MODULE_NAME][chatId]) {
-        extension_settings[MODULE_NAME][chatId] = {
+    if (!extension_settings[MODULE_NAME][CHAR_ID]) {
+        extension_settings[MODULE_NAME][CHAR_ID] = {
             enabled: false,
             prompts: [],
         };
     }
 
-    if (!chatId) {
+    if (!CHAR_ID) {
         return;
     }
 
-    CHAT_ID = chatId;
-
-    const chatSettings = extension_settings[MODULE_NAME][chatId];
+    const chatSettings = extension_settings[MODULE_NAME][CHAR_ID];
     const btns = $(`<div id="sp_container" style="z-index: 99999; /*background: red;*/ position:fixed; bottom: 0; margin-bottom: 5vh; margin-left: 1vh;"></div>`)
 
     $('#chat').append(btns);
     se.prop('checked', chatSettings.enabled);
     se.on("click", () => { onEnabledClick(chatSettings) });
     add.on("click", () => { onAddNew(li, btns, chatSettings); updatePromptButtons(btns, chatSettings); });
-    lbl.text(`Prompts for chat "${chatId}"`);
+    lbl.text(`Prompts for character "${CHAR_ID}"`);
 
     const prompts = chatSettings.prompts;
     for (var k in prompts) {
@@ -122,8 +123,8 @@ async function onAddNew(li, btns, chatSettings, value = '') {
 }
 
 async function processStateText() {
+    console.debug(DEBUG_PREFIX, 'processStateText', CHAR_ID, IS_LOADING, IS_GENERATING);
     if (IS_LOADING) {
-        IS_LOADING = false;
         return;
     }
 
@@ -134,14 +135,11 @@ async function processStateText() {
 
     IS_GENERATING = true;
 
-    const chatId = CHAT_ID;
-    console.debug(DEBUG_PREFIX, 'processStateText', chatId);
-
-    if (!chatId || !extension_settings[MODULE_NAME][chatId].enabled)
+    if (!CHAR_ID || !extension_settings[MODULE_NAME][CHAR_ID].enabled)
         return;
 
     try {
-        const prompts = extension_settings[MODULE_NAME][chatId].prompts;
+        const prompts = extension_settings[MODULE_NAME][CHAR_ID].prompts;
         for (var k in prompts) {
             const prmpt = prompts[k];
             await sendPrompt(prmpt, k);
@@ -156,17 +154,17 @@ async function sendPrompt(prmpt, k) {
     if (prmpt) {
         toastr.info(`State Extension. Sending prompt : ${prmpt}`);
 
-        const chat = CONTEXT.chat;
+        const chat = getContext().chat;
         const id = `State prompt ${k}`;
 
         // await removeObjectFromChat(chat, id);
 
-        const resp = await CONTEXT.generateQuietPrompt(prmpt);
+        const resp = await getContext().generateQuietPrompt(prmpt);
         const message = { "name": "System", "is_user": false, "is_system": false, "state_extension_id": id, "send_date": new Date().toString(), "mes": resp, "extra": { "isSmallSys": true } };
         console.log(DEBUG_PREFIX, 'Adding Message', message);
 
         chat.push(message);
-        CONTEXT.addOneMessage(message);
+        getContext().addOneMessage(message);
         await eventSource.emit(event_types.CHARACTER_MESSAGE_RENDERED, (chat.length - 1));
         await saveChatConditional();
     }
@@ -223,6 +221,9 @@ jQuery(async () => {
     console.log(DEBUG_PREFIX, 'loading', extension_settings[MODULE_NAME]);
     const windowHtml = $(await $.get(`${EXTENSION_FOLDER_PATH}/window.html`));
     $('#extensions_settings').append(windowHtml);
-    eventSource.on(event_types.CHAT_CHANGED, (chatId) => loadSettings(chatId));
+    
+    eventSource.on(event_types.CHAT_CHANGED, loadSettings);
+    eventSource.on(event_types.MESSAGE_SENT, ()=>{IS_LOADING = true});
+    eventSource.on(event_types.GENERATION_ENDED, ()=>{IS_LOADING = false});
     eventSource.on(event_types.MESSAGE_RECEIVED, processStateText);
 });
