@@ -43,7 +43,7 @@ function loadSettings() {
     }
 
     const chatSettings = extension_settings[MODULE_NAME][CHAR_ID];
-    const btns = $(`<div id="sp_container" style="z-index: 99999; /*background: red;*/ position:fixed; bottom: 0; margin-bottom: 5vh; margin-left: 1vh;"></div>`)
+    const btns = $(`<div id="sp_container" style="z-index: 99999; /*background: red;*/ position:fixed; bottom: 0; margin-bottom: 5vh; margin-left: 0.5vh;"></div>`)
 
     $('#chat').append(btns);
     se.prop('checked', chatSettings.enabled);
@@ -60,24 +60,28 @@ function loadSettings() {
 }
 
 function updatePromptButtons(btns, chatSettings) {
-    console.log(DEBUG_PREFIX, 'Updating prompt btns.')
     btns.empty();
     const statePrompts = chatSettings.prompts;
+    console.log(DEBUG_PREFIX, 'Updating prompt btns.', statePrompts)
     for (var k in statePrompts) {
-        const value = statePrompts[k];
-        const divBtn = getBtn(k, value);
-        btns.append(divBtn);
+        const prmpt = statePrompts[k];
+        if (prmpt && prmpt.prompt) {
+            const divBtn = getBtn(k, prmpt);
+            btns.append(divBtn);
+        }
     }
 }
 
-function getBtn(k, value) {
-    const vlCount = parseInt(k)+1;
+function getBtn(k, prmpt) {
+    const value = prmpt.prompt;
+    const vlCount = parseInt(k) + 1;
     const elBtn = $(`<a title="${value}" style="text-shadow: rgb(0, 0, 0) 0px 0px 2px; box-sizing: border-box; color: rgb(255, 255, 255); color-scheme: light only; cursor: pointer; font-family: "Noto Sans", "Noto Color Emoji", sans-serif; font-size: 16.5px; font-weight: 400; vertical-align: middle;">${vlCount}-${value[0].toUpperCase()}</a>`);
     const divBtn = $(`<div style="border: 1px black solid; border-radius: 4px;"><br></div>`);
     divBtn.append(elBtn);
     elBtn.on('click', () => {
-        console.log(DEBUG_PREFIX, 'CLICKED', value);
-        sendPrompt(value, k);
+        console.log(DEBUG_PREFIX, 'CLICKED', prmpt);
+        IS_LOADING = false;
+        sendPrompt(prompt, k);
     });
     return divBtn;
 }
@@ -89,11 +93,35 @@ async function onEnabledClick(chatSettings) {
 
 async function savePrompt(chatSettings) {
     const prompts = [];
+
     const values = $('.state-prompt-area').toArray();
     for (var k in values) {
         const value = values[k].value.trim();
         if (value) {
-            prompts[k] = value;
+            if (!prompts[k]) {
+                prompts[k] = {};
+            }
+            prompts[k].prompt = value;
+        }
+    }
+    const templates = $('.state-template-area').toArray();
+    for (var k in templates) {
+        const value = templates[k].value.trim();
+        if (value) {
+            if (!prompts[k]) {
+                prompts[k] = {};
+            }
+            prompts[k].template = value;
+        }
+    }
+    const checks = $('.state-issmall-check').toArray();
+    for (var k in checks) {
+        const value = checks[k].checked;
+        if (value) {
+            if (!checks[k]) {
+                checks[k] = {};
+            }
+            checks[k].isSmall = value;
         }
     }
 
@@ -101,23 +129,44 @@ async function savePrompt(chatSettings) {
     saveSettingsDebounced();
 }
 
-async function onAddNew(li, btns, chatSettings, value = '') {
-    const promptArea = $(`<textarea class="state-prompt-area" placeholder="(Prompt sent to probe the current state)" class="text_pole widthUnset flex1" rows="2">${value}</textarea>`);
-    const rmvBtn = $(`<div class="menu_button menu_button_icon fa-solid fa-trash-can redWarningBG" title="Remove"></div>`);
+async function onAddNew(li, btns, chatSettings, prmpt = {}) {
+    const els = li.children()?.length || 0;
+    const prmptTitle = "Prompt sent to probe the current state";
+    const templTitle = "Template of the message that will be added. The placeholder \${response} will be replaced with the Ai's response.";
+    const smallTitle = "If checked, the reply to the sent prompt will be added as a \"small system message\" instead of a full chat message."
+
+    const promptArea = $(`<textarea class="state-prompt-area" placeholder="(${prmptTitle})" title="${prmptTitle}" class="text_pole widthUnset flex1" rows="2">${prmpt.prompt || ""}</textarea>`);
+    const templateArea = $(`<textarea class="state-template-area" placeholder="(${templTitle})" title="${templTitle}" class="text_pole widthUnset flex1" rows="2">${prmpt.template || "${response}"}</textarea>`);
+    const smallCheck = $(`<label class="checkbox_label" for="is_small${els}"><small>Is Small Reply?</small><input type="checkbox" class="state-issmall-check" title="${smallTitle}" name="is_small${els}" checked="true"/></label>`);
+
+
+    const rmvBtn = $(`<div class="menu_button menu_button_icon fa-solid fa-trash-can redWarningBG" style="" title="Remove"></div>`);
     const liEl = $(`<li style="width: 100%;"></li>`)
 
+    smallCheck.prop('checked', prmpt.isSmall || true);
+
     promptArea.on('change', () => {
+        savePrompt(chatSettings);
+        updatePromptButtons(btns, chatSettings);
+    });
+    templateArea.on('change', () => {
+        savePrompt(chatSettings);
+        updatePromptButtons(btns, chatSettings);
+    });
+    smallCheck.on('change', () => {
         savePrompt(chatSettings);
         updatePromptButtons(btns, chatSettings);
     });
     rmvBtn.on('click', () => {
         liEl.remove();
         savePrompt(chatSettings);
-        updatePromptButtons(btns, chatSettings);
         saveSettingsDebounced();
+        updatePromptButtons(btns, chatSettings);
     });
 
     liEl.append(promptArea);
+    liEl.append(templateArea);
+    liEl.append(smallCheck);
     liEl.append(rmvBtn);
     li.append(liEl);
 }
@@ -145,22 +194,32 @@ async function processStateText() {
             await sendPrompt(prmpt, k);
         }
     } catch (error) {
-        toastr.error("State extension: Error during generation.", error);
+        toastr.error("State extension: Error during generation.");
+        console.log(DEBUG_PREFIX, error);
     }
     IS_GENERATING = false;
 }
 
 async function sendPrompt(prmpt, k) {
-    if (prmpt) {
-        toastr.info(`State Extension. Sending prompt : ${prmpt}`);
-
+    if (prmpt && prmpt.prompt) {
         const chat = getContext().chat;
         const id = `State prompt ${k}`;
+        const template = prmpt.template;
+        var value = prmpt.prompt;
 
-        // await removeObjectFromChat(chat, id);
+        toastr.info(`State Extension. Sending Prompt : ${value}`);
+        console.log(`State Extension. Sending Prompt : ${value} / Template : ${template} / IsSmal : ${prmpt.isSmall}`);
 
-        const resp = await getContext().generateQuietPrompt(prmpt);
-        const message = { "name": "System", "is_user": false, "is_system": false, "state_extension_id": id, "send_date": new Date().toString(), "mes": resp, "extra": { "isSmallSys": true } };
+        // removeObjectFromArray(chat, "state_extension_id", id);
+        // await eventSource.emit(event_types.CHARACTER_MESSAGE_RENDERED, (chat.length - 1));
+        // await saveChatConditional();
+
+        if (template) {
+            value = template.replace('${response}', value);
+        }
+
+        const resp = await getContext().generateQuietPrompt(value);
+        const message = { "name": "System", "is_user": false, "is_system": false, "state_extension_id": id, "send_date": new Date().toString(), "mes": resp, "extra": { "isSmallSys": prmpt.isSmall } };
         console.log(DEBUG_PREFIX, 'Adding Message', message);
 
         chat.push(message);
@@ -168,12 +227,6 @@ async function sendPrompt(prmpt, k) {
         await eventSource.emit(event_types.CHARACTER_MESSAGE_RENDERED, (chat.length - 1));
         await saveChatConditional();
     }
-}
-
-async function removeObjectFromChat(chat, id) {
-    removeObjectFromArray(chat, "state_extension_id", id);
-    await eventSource.emit(event_types.CHARACTER_MESSAGE_RENDERED, (chat.length - 1));
-    await saveChatConditional();
 }
 
 function removeObjectFromArray(array, key, value) {
@@ -185,35 +238,6 @@ function removeObjectFromArray(array, key, value) {
     return removeObjectFromArray(array, key, value);
 }
 
-async function getDate(now) {
-    // Define an array of month names
-    const monthNames = [
-        "January", "February", "March", "April", "May", "June",
-        "July", "August", "September", "October", "November", "December"
-    ];
-
-    // Extract the components of the date
-    const month = monthNames[now.getMonth()];
-    const day = now.getDate();
-    const year = now.getFullYear();
-    let hour = now.getHours();
-    const minutes = now.getMinutes();
-    const ampm = hour >= 12 ? 'pm' : 'am';
-
-    // Convert the hour to 12-hour format
-    hour = hour % 12;
-    hour = hour ? hour : 12; // the hour '0' should be '12'
-
-    // Format the minutes to always be two digits
-    const formattedMinutes = minutes < 10 ? '0' + minutes : minutes;
-
-    // Construct the formatted date string
-    const formattedDate = `${month} ${day}, ${year} ${hour}:${formattedMinutes}${ampm}`;
-
-    // Output the formatted date
-    return formattedDate;
-}
-
 //#############################//
 //  Extension load             //
 //#############################//
@@ -221,9 +245,11 @@ jQuery(async () => {
     console.log(DEBUG_PREFIX, 'loading', extension_settings[MODULE_NAME]);
     const windowHtml = $(await $.get(`${EXTENSION_FOLDER_PATH}/window.html`));
     $('#extensions_settings').append(windowHtml);
-    
-    eventSource.on(event_types.CHAT_CHANGED, loadSettings);
-    eventSource.on(event_types.MESSAGE_SENT, ()=>{IS_LOADING = true});
-    eventSource.on(event_types.GENERATION_ENDED, ()=>{IS_LOADING = false});
-    eventSource.on(event_types.MESSAGE_RECEIVED, processStateText);
+
+    eventSource.on(event_types.MESSAGE_SENT, () => { IS_LOADING = true });
+    eventSource.on(event_types.MESSAGE_SWIPED, () => { IS_LOADING = true });
+    eventSource.on(event_types.GENERATION_STARTED, () => { IS_LOADING = true });
+    eventSource.on(event_types.GENERATION_ENDED, () => { IS_LOADING = false });
+    eventSource.on(event_types.CHAT_CHANGED, () => { setTimeout(loadSettings, 1000) });
+    eventSource.on(event_types.MESSAGE_RECEIVED, () => { setTimeout(() => { processStateText() }, 500); });
 });
