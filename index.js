@@ -76,7 +76,7 @@ function updatePromptButtons(btns, chatSettings) {
 function getBtn(k, prmpt) {
     const value = prmpt.prompt;
     const vlCount = parseInt(k) + 1;
-    const elBtn = $(`<a title="${escapeHtml(value)}" class="api_button menu_button" style="width: fit-content;">${vlCount}-${value[0].toUpperCase()}</a>`);
+    const elBtn = $(`<a title="${escapeHtml(value)}" class="api_button menu_button" style="width: fit-content; padding: 0px; margin: 0px;">${vlCount}-${value[0].toUpperCase()}</a>`);
     const divBtn = $(`<div style="border: 1px black solid; border-radius: 4px;"><br></div>`);
     divBtn.append(elBtn);
     elBtn.on('click', () => {
