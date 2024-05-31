@@ -9,6 +9,6 @@ TODO:
  - ~~Change the configuration so that it's saved for each Character instead of each individual Chat~~(DONE)[BREAKING - Save your existing prompts and migrate manually if coming from version 1.0.3];
  - ~~Add a "mini prompt" checkbox to the UI to decide how the result of a given prompt is shown in the chat history (mini response or full resposnse)~~(DONE);
  - Implement a keyword system, where the User can assign keywords to each prompt and those prompts will only trigger in case the last N messages contain said keywords (like a lorebook);
+ - ~~Add an option to make the result of a prompt unique in the chat, as in, before adding a new result, the previous one will be removed~~(DONE);
  - Add an option to choose between adding the results of each prompt as individual messages (as is now) and appending the results to character's last message;
- - Add an option to make the result of a prompt unique in the chat, as in, before adding a new result, the previous one will be removed;
  - Fix the UI;

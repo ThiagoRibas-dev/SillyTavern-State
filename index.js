@@ -8,9 +8,21 @@ const MODULE_NAME = 'State';
 const DEBUG_PREFIX = "<State extension> ";
 
 let CHAR_ID = null;
-let IS_LOADING = true;
+let IS_CAN_GEN = false;
 let IS_GENERATING = false;
 
+String.prototype.hashCode = function() {
+    var hash = 0,
+      i, chr;
+    if (this.length === 0) return hash;
+    for (i = 0; i < this.length; i++) {
+      chr = this.charCodeAt(i);
+      hash = ((hash << 5) - hash) + chr;
+      hash |= 0; // Convert to 32bit integer
+    }
+    return hash;
+  }
+  
 //#############################//
 //  Extension UI and Settings  //
 //#############################//
@@ -19,7 +31,7 @@ function loadSettings() {
     const charName = SillyTavern.getContext().characters[charId].name;
     CHAR_ID = `${charName}(${charId})`;
 
-    IS_LOADING = true;
+    IS_CAN_GEN = false;
     console.log(DEBUG_PREFIX, `Loading ${CHAR_ID}`);
 
     const li = $('#state-prompt-set');
@@ -43,7 +55,7 @@ function loadSettings() {
     }
 
     const chatSettings = extension_settings[MODULE_NAME][CHAR_ID];
-    const btns = $(`<div id="sp_container" style="z-index: 99999; /*background: red;*/ position:fixed; bottom: 0; margin-bottom: 5vh; margin-left: 0.5vh;"></div>`)
+    const btns = $(`<span id="sp_container" style="z-index: 99999; /*background: red;*/ position:fixed; bottom: 0; margin-bottom: 5vh; margin-left: 0.5vh;"></span>`)
 
     $('#chat').append(btns);
     se.prop('checked', chatSettings.enabled);
@@ -81,7 +93,7 @@ function getBtn(k, prmpt) {
     divBtn.append(elBtn);
     elBtn.on('click', () => {
         console.log(DEBUG_PREFIX, 'CLICKED', prmpt);
-        IS_LOADING = false;
+        IS_CAN_GEN = true;
         sendPrompt(prmpt, k);
     });
     return divBtn;
@@ -130,7 +142,7 @@ function escapeHtml(unsafe) {
     return unsafe.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;');
 }
 
-async function onAddNew(li, btns, chatSettings, prmpt = {prompt: "", template: "{{state}}", isSmall: true}) {
+async function onAddNew(li, btns, chatSettings, prmpt = {prompt: "", template: "{{state}}", isSmall: true, isDelete: false}) {
     console.log(DEBUG_PREFIX, 'ADD NEW', prmpt);
     const els = li.children()?.length || 0;
     const prmptTitle = "Prompt sent to probe the current state";
@@ -141,12 +153,16 @@ async function onAddNew(li, btns, chatSettings, prmpt = {prompt: "", template: "
     const templateArea = $(`<textarea class="state-template-area" placeholder="(${templTitle})" title="${templTitle.replace("\"","")}" class="text_pole widthUnset flex1" rows="2">${prmpt.template}</textarea>`);
     const smallCheck = $(`<input type="checkbox" class="state-issmall-check" title="${smallTitle.replace("\"","")}" name="is_small${els}" ${prmpt.isSmall ? "checked" : ""}/>`);
     const smallCheckLbl = $(`<label class="checkbox_label" for="is_small${els}"><small>Is Small Reply?</small></label>`);
+    const deleteCheck = $(`<input type="checkbox" class="state-isdelete-check" title="${smallTitle.replace("\"","")}" name="is_delete${els}" ${prmpt.isDelete ? "checked" : ""}/>`);
+    const deleteCheckLbl = $(`<label title="If checked, keep only the latest reply to this prompt, removing past replies." class="checkbox_label" for="is_delete${els}"><small>Keep only one?</small></label>`);
 
     const rmvBtn = $(`<div class="menu_button menu_button_icon fa-solid fa-trash-can redWarningBG" title="Remove"></div>`);
     const liEl = $(`<li style="width: 100%; border: 1px grey solid; border-radius: 2px; margin-botom: 2px;" ></li>`)
 
     smallCheck.prop('checked', prmpt.isSmall);
     smallCheck.attr('checked', prmpt.isSmall);
+    deleteCheck.prop('checked', prmpt.isDelete);
+    deleteCheck.attr('checked', prmpt.isDelete);
 
     promptArea.on('change', () => {
         savePrompt(chatSettings);
@@ -160,6 +176,10 @@ async function onAddNew(li, btns, chatSettings, prmpt = {prompt: "", template: "
         savePrompt(chatSettings);
         updatePromptButtons(btns, chatSettings);
     });
+    deleteCheck.on('change', () => {
+        savePrompt(chatSettings);
+        updatePromptButtons(btns, chatSettings);
+    });
     rmvBtn.on('click', () => {
         liEl.remove();
         savePrompt(chatSettings);
@@ -170,25 +190,23 @@ async function onAddNew(li, btns, chatSettings, prmpt = {prompt: "", template: "
     liEl.append(templateArea);
     smallCheckLbl.append(smallCheck);
     liEl.append(smallCheckLbl);
+    deleteCheckLbl.append(deleteCheck);
+    liEl.append(deleteCheckLbl);
     liEl.append(rmvBtn);
     li.append(liEl);
 }
 
 async function processStateText() {
-    console.debug(DEBUG_PREFIX, 'processStateText', CHAR_ID, IS_LOADING, IS_GENERATING);
-    if (IS_LOADING) {
+    console.debug(DEBUG_PREFIX, 'processStateText', CHAR_ID, IS_CAN_GEN, IS_GENERATING);
+    if (!IS_CAN_GEN) {
         return;
     }
 
-    if (IS_GENERATING) {
-        toastr.error("Generation already in process.");
+    if (!CHAR_ID || !extension_settings[MODULE_NAME][CHAR_ID].enabled){
         return;
     }
 
-    IS_GENERATING = true;
-
-    if (!CHAR_ID || !extension_settings[MODULE_NAME][CHAR_ID].enabled)
-        return;
+    IS_CAN_GEN = false;
 
     try {
         const prompts = extension_settings[MODULE_NAME][CHAR_ID].prompts;
@@ -206,29 +224,45 @@ async function processStateText() {
 async function sendPrompt(prmpt, k) {
     console.log(DEBUG_PREFIX, 'sendPrompt', prmpt, k);
     if (prmpt && prmpt.prompt) {
-        const chat = getContext().chat;
-        const id = `State prompt ${k}`;
+        const id = `System(${k})`;
         const template = prmpt.template;
         const value = prmpt.prompt;
 
         toastr.info(`State Extension. Sending Prompt : ${value}`);
         console.log(`State Extension. Sending Prompt : ${value} / Template : ${template} / IsSmal : ${prmpt.isSmall}`);
 
-        // removeObjectFromArray(chat, "state_extension_id", id);
-        // await eventSource.emit(event_types.CHARACTER_MESSAGE_RENDERED, (chat.length - 1));
-        // await saveChatConditional();
 
         var resp = await getContext().generateQuietPrompt(value);
-        if (resp) {
+        if (template) {
             resp = template.replace('{{state}}', resp);
             console.log(DEBUG_PREFIX, 'sendPrompt apply template', resp);
         }
-        const message = { "name": "System", "is_user": false, "is_system": false, "state_extension_id": id, "send_date": new Date().toString(), "mes": resp, "extra": { "isSmallSys": prmpt.isSmall } };
+        const message = { "name": id, "is_user": false, "is_system": false, "send_date": new Date().toString(), "mes": resp, "extra": { "isSmallSys": prmpt.isSmall } };
         console.log(DEBUG_PREFIX, 'Adding Message', message);
 
-        chat.push(message);
+        
+        if(prmpt.isDelete){
+            await removeOldMessage(id);
+        }
+        getContext().chat.push(message);
         getContext().addOneMessage(message);
-        await eventSource.emit(event_types.CHARACTER_MESSAGE_RENDERED, (chat.length - 1));
+        await eventSource.emit(event_types.CHARACTER_MESSAGE_RENDERED, (getContext().chat.length - 1));
+        await saveChatConditional();
+    }
+}
+
+async function removeOldMessage(id) {
+    console.log(DEBUG_PREFIX, 'REMOVING : ', id);
+
+    getContext().chat = removeObjectFromArray(getContext().chat, "name", id);
+    eventSource.emit(event_types.MESSAGE_DELETED, getContext().chat.length);
+
+    const mes = $(`#chat .mes[ch_name="${id}"]`).first();
+    if(mes.length){
+        mes.removeClass('mes');
+        mes.css('display', 'none');
+        mes.attr('ch_name', '');
+        mes.prop('ch_name', '');
         await saveChatConditional();
     }
 }
@@ -250,11 +284,9 @@ jQuery(async () => {
     const windowHtml = $(await $.get(`${EXTENSION_FOLDER_PATH}/window.html`));
     $('#extensions_settings').append(windowHtml);
 
-    //IS_LOADING is used to ensure that the prompts won't be triggered when changing chats or characters, since that somehow triggers the MESSAGE_RECEIVED event, which is odd in my opnion
-    eventSource.on(event_types.MESSAGE_SENT, () => { IS_LOADING = true });
-    eventSource.on(event_types.MESSAGE_SWIPED, () => { IS_LOADING = true });
-    eventSource.on(event_types.GENERATION_STARTED, () => { IS_LOADING = true });
-    eventSource.on(event_types.GENERATION_ENDED, () => { IS_LOADING = false });
+    //IS_CAN_GEN is used to ensure that the prompts won't be triggered when changing chats or characters, since that somehow triggers the MESSAGE_RECEIVED event, which is odd in my opnion
+    eventSource.on(event_types.GENERATION_ENDED, () => { IS_CAN_GEN = true });
+    eventSource.on(event_types.GENERATION_STOPPED, () => { IS_CAN_GEN = true });
     eventSource.on(event_types.MESSAGE_DELETED, () => { setTimeout(loadSettings, 1000) });
     eventSource.on(event_types.CHAT_CHANGED, () => { setTimeout(loadSettings, 1000) });
     eventSource.on(event_types.MESSAGE_RECEIVED, () => { setTimeout(() => { processStateText() }, 500); });
