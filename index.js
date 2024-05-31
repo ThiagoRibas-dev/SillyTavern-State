@@ -248,9 +248,9 @@ async function sendPrompt(prmpt, k) {
         console.log(DEBUG_PREFIX, 'Adding Message', message);
 
         
-        if(prmpt.isDelete){
-            await removeOldMessage(id);
-        }
+        // if(prmpt.isDelete){
+        //     await removeOldMessage(id);
+        // }
         getContext().chat.push(message);
         getContext().addOneMessage(message);
         await eventSource.emit(event_types.CHARACTER_MESSAGE_RENDERED, (getContext().chat.length - 1));
@@ -262,7 +262,8 @@ async function removeOldMessage(id) {
     console.log(DEBUG_PREFIX, 'REMOVING : ', id);
 
     getContext().chat = removeObjectFromArray(getContext().chat, "name", id);
-    eventSource.emit(event_types.MESSAGE_DELETED, getContext().chat.length);
+    console.log(DEBUG_PREFIX, 'OLD REMOVED MESSAGE', getContext().chat);
+    // eventSource.emit(event_types.MESSAGE_DELETED, getContext().chat.length);
 
     const mes = $(`#chat .mes[ch_name="${id}"]`).first();
     if(mes.length){
