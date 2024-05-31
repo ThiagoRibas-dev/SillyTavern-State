@@ -76,7 +76,7 @@ function updatePromptButtons(btns, chatSettings) {
 function getBtn(k, prmpt) {
     const value = prmpt.prompt;
     const vlCount = parseInt(k) + 1;
-    const elBtn = $(`<a title="${value}" style="text-shadow: rgb(0, 0, 0) 0px 0px 2px; box-sizing: border-box; color: rgb(255, 255, 255); color-scheme: light only; cursor: pointer; font-family: "Noto Sans", "Noto Color Emoji", sans-serif; font-size: 16.5px; font-weight: 400; vertical-align: middle;">${vlCount}-${value[0].toUpperCase()}</a>`);
+    const elBtn = $(`<a title="${escapeHtml(value)}" style="text-shadow: rgb(0, 0, 0) 0px 0px 2px; box-sizing: border-box; color: rgb(255, 255, 255); color-scheme: light only; cursor: pointer; font-family: "Noto Sans", "Noto Color Emoji", sans-serif; font-size: 16.5px; font-weight: 400; vertical-align: middle;">${vlCount}-${value[0].toUpperCase()}</a>`);
     const divBtn = $(`<div style="border: 1px black solid; border-radius: 4px;"><br></div>`);
     divBtn.append(elBtn);
     elBtn.on('click', () => {
@@ -126,6 +126,10 @@ async function savePrompt(chatSettings) {
     saveSettingsDebounced();
 }
 
+async function escapeHtml(unsafe) {
+    return unsafe.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;');
+}
+
 async function onAddNew(li, btns, chatSettings, prmpt = {prompt: "", template: "{{state}}", isSmall: true}) {
     console.log(DEBUG_PREFIX, 'ADD NEW', prmpt);
     const els = li.children()?.length || 0;
@@ -133,9 +137,9 @@ async function onAddNew(li, btns, chatSettings, prmpt = {prompt: "", template: "
     const templTitle = "Template of the message that will be added. The placeholder {{state}} will be replaced with the Ai's response.";
     const smallTitle = 'If checked, the reply to the sent prompt will be added as a "small system message" instead of a full chat message.';
 
-    const promptArea = $(`<textarea class="state-prompt-area" placeholder="(${prmptTitle})" title="${prmptTitle}" class="text_pole widthUnset flex1" rows="2">${prmpt.prompt}</textarea>`);
-    const templateArea = $(`<textarea class="state-template-area" placeholder="(${templTitle})" title="${templTitle}" class="text_pole widthUnset flex1" rows="2">${prmpt.template}</textarea>`);
-    const smallCheck = $(`<input type="checkbox" class="state-issmall-check" title="${smallTitle}" name="is_small${els}" ${prmpt.isSmall ? "checked" : ""}/>`);
+    const promptArea = $(`<textarea class="state-prompt-area" placeholder="(${prmptTitle})" title="${prmptTitle.replace("\"","")}" class="text_pole widthUnset flex1" rows="2">${prmpt.prompt}</textarea>`);
+    const templateArea = $(`<textarea class="state-template-area" placeholder="(${templTitle})" title="${templTitle.replace("\"","")}" class="text_pole widthUnset flex1" rows="2">${prmpt.template}</textarea>`);
+    const smallCheck = $(`<input type="checkbox" class="state-issmall-check" title="${smallTitle.replace("\"","")}" name="is_small${els}" ${prmpt.isSmall ? "checked" : ""}/>`);
     const smallCheckLbl = $(`<label class="checkbox_label" for="is_small${els}"><small>Is Small Reply?</small></label>`);
 
     const rmvBtn = $(`<div class="menu_button menu_button_icon fa-solid fa-trash-can redWarningBG" title="Remove"></div>`);
