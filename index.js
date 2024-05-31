@@ -76,7 +76,7 @@ function updatePromptButtons(btns, chatSettings) {
 function getBtn(k, prmpt) {
     const value = prmpt.prompt;
     const vlCount = parseInt(k) + 1;
-    const elBtn = $(`<a title="${escapeHtml(value)}" style="text-shadow: rgb(0, 0, 0) 0px 0px 2px; box-sizing: border-box; color: rgb(255, 255, 255); color-scheme: light only; cursor: pointer; font-family: "Noto Sans", "Noto Color Emoji", sans-serif; font-size: 16.5px; font-weight: 400; vertical-align: middle;">${vlCount}-${value[0].toUpperCase()}</a>`);
+    const elBtn = $(`<a title="${escapeHtml(value)}" class="api_button menu_button" style="width: fit-content;">${vlCount}-${value[0].toUpperCase()}</a>`);
     const divBtn = $(`<div style="border: 1px black solid; border-radius: 4px;"><br></div>`);
     divBtn.append(elBtn);
     elBtn.on('click', () => {
@@ -126,7 +126,7 @@ async function savePrompt(chatSettings) {
     saveSettingsDebounced();
 }
 
-async function escapeHtml(unsafe) {
+function escapeHtml(unsafe) {
     return unsafe.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;');
 }
 
