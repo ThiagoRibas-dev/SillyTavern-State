@@ -132,6 +132,13 @@ async function savePrompt(chatSettings) {
             prompts[k].isSmall = value;
         }
     }
+    const deletes = $('.state-isdelete-check').toArray();
+    for (var k in deletes) {
+        const value = deletes[k].checked;
+        if (value) {
+            prompts[k].isDelete = value;
+        }
+    }
 
     chatSettings.prompts = prompts;
     console.log(DEBUG_PREFIX, 'SAVED', chatSettings);
