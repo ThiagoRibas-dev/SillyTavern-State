@@ -11,18 +11,18 @@ let CHAR_ID = null;
 let IS_CAN_GEN = false;
 let IS_GENERATING = false;
 
-String.prototype.hashCode = function() {
+String.prototype.hashCode = function () {
     var hash = 0,
-      i, chr;
+        i, chr;
     if (this.length === 0) return hash;
     for (i = 0; i < this.length; i++) {
-      chr = this.charCodeAt(i);
-      hash = ((hash << 5) - hash) + chr;
-      hash |= 0; // Convert to 32bit integer
+        chr = this.charCodeAt(i);
+        hash = ((hash << 5) - hash) + chr;
+        hash |= 0; // Convert to 32bit integer
     }
     return hash;
-  }
-  
+}
+
 //#############################//
 //  Extension UI and Settings  //
 //#############################//
@@ -149,19 +149,20 @@ function escapeHtml(unsafe) {
     return unsafe.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;');
 }
 
-async function onAddNew(li, btns, chatSettings, prmpt = {prompt: "", template: "{{state}}", isSmall: true, isDelete: false}) {
+async function onAddNew(li, btns, chatSettings, prmpt = { prompt: "", template: "{{state}}", isSmall: true, isDelete: true }) {
     console.log(DEBUG_PREFIX, 'ADD NEW', prmpt);
     const els = li.children()?.length || 0;
     const prmptTitle = "Prompt sent to probe the current state";
     const templTitle = "Template of the message that will be added. The placeholder {{state}} will be replaced with the Ai's response.";
     const smallTitle = 'If checked, the reply to the sent prompt will be added as a "small system message" instead of a full chat message.';
+    const deleteTitle = 'If checked, previous states will be removed from the chat before a new one is inserted. Useful to not have older, outdated information pulluting the chat.';
 
-    const promptArea = $(`<textarea class="state-prompt-area" placeholder="(${prmptTitle})" title="${prmptTitle.replace("\"","")}" class="text_pole widthUnset flex1" rows="2">${prmpt.prompt}</textarea>`);
-    const templateArea = $(`<textarea class="state-template-area" placeholder="(${templTitle})" title="${templTitle.replace("\"","")}" class="text_pole widthUnset flex1" rows="2">${prmpt.template}</textarea>`);
-    const smallCheck = $(`<input type="checkbox" class="state-issmall-check" title="${smallTitle.replace("\"","")}" name="is_small${els}" ${prmpt.isSmall ? "checked" : ""}/>`);
+    const promptArea = $(`<textarea class="state-prompt-area" placeholder="(${prmptTitle})" title="${prmptTitle.replace("\"", "")}" class="text_pole widthUnset flex1" rows="2">${prmpt.prompt}</textarea>`);
+    const templateArea = $(`<textarea class="state-template-area" placeholder="(${templTitle})" title="${templTitle.replace("\"", "")}" class="text_pole widthUnset flex1" rows="2">${prmpt.template}</textarea>`);
+    const smallCheck = $(`<input type="checkbox" class="state-issmall-check" title="${smallTitle.replace("\"", "")}" name="is_small${els}" ${prmpt.isSmall ? "checked" : ""}/>`);
     const smallCheckLbl = $(`<label class="checkbox_label" for="is_small${els}"><small>Is Small Reply?</small></label>`);
-    const deleteCheck = $(`<input type="checkbox" class="state-isdelete-check" title="${smallTitle.replace("\"","")}" name="is_delete${els}" ${prmpt.isDelete ? "checked" : ""}/>`);
-    const deleteCheckLbl = $(`<label title="If checked, keep only the latest reply to this prompt, removing past replies." class="checkbox_label" for="is_delete${els}"><small>Keep only one?</small></label>`);
+    const deleteCheck = $(`<input type="checkbox" class="state-isdelete-check" title="${deleteTitle.replace("\"", "")}" name="is_delete${els}" ${prmpt.isDelete ? "checked" : ""}/>`);
+    const deleteCheckLbl = $(`<label title="If checked, keep only the latest reply to this prompt, removing past replies." class="checkbox_label" for="is_delete${els}"><small>Exclusive state</small></label>`);
 
     const rmvBtn = $(`<div class="menu_button menu_button_icon fa-solid fa-trash-can redWarningBG" title="Remove"></div>`);
     const liEl = $(`<li style="width: 100%; border: 1px grey solid; border-radius: 2px; margin-botom: 2px;" ></li>`)
@@ -209,7 +210,7 @@ async function processStateText() {
         return;
     }
 
-    if (!CHAR_ID || !extension_settings[MODULE_NAME][CHAR_ID].enabled){
+    if (!CHAR_ID || !extension_settings[MODULE_NAME][CHAR_ID].enabled) {
         return;
     }
 
@@ -231,15 +232,15 @@ async function processStateText() {
 async function sendPrompt(prmpt, k) {
     console.log(DEBUG_PREFIX, 'sendPrompt', prmpt, k);
     if (prmpt && prmpt.prompt) {
-        const id = `System(${k})`;
+        const id = `State ${k}`;
         const template = prmpt.template;
         const value = prmpt.prompt;
 
-        toastr.info(`State Extension. Sending Prompt : ${value}`);
+        toastr.info(`State Extension. Sending Prompt : ${value.slice(0, 50)}...`);
         console.log(`State Extension. Sending Prompt : ${value} / Template : ${template} / IsSmal : ${prmpt.isSmall}`);
 
+        var resp = await removeAndGenerate(id, value);
 
-        var resp = await getContext().generateQuietPrompt(value);
         if (template) {
             resp = template.replace('{{state}}', resp);
             console.log(DEBUG_PREFIX, 'sendPrompt apply template', resp);
@@ -247,41 +248,89 @@ async function sendPrompt(prmpt, k) {
         const message = { "name": id, "is_user": false, "is_system": false, "send_date": new Date().toString(), "mes": resp, "extra": { "isSmallSys": prmpt.isSmall } };
         console.log(DEBUG_PREFIX, 'Adding Message', message);
 
-        
-        // if(prmpt.isDelete){
-        //     await removeOldMessage(id);
-        // }
         getContext().chat.push(message);
         getContext().addOneMessage(message);
+
+        getContext().chat[getContext().chat.length - 1].state = { idx: k, state: resp };
         await eventSource.emit(event_types.CHARACTER_MESSAGE_RENDERED, (getContext().chat.length - 1));
         await saveChatConditional();
+
+        $('#chat .mes').removeClass('last_mes');
+        $('#chat .mes').last().addClass('last_mes');
+    }
+
+    async function removeAndGenerate(id, value) {
+        var resp;
+        var originalChatJson;
+        var deletedIdx = [];
+        try {//we do this in the try block first in order to be able to revert the chat array state in case generateQuietPrompt errors out
+            if (prmpt.isDelete) {
+                const originalChat = getContext().chat;
+                originalChatJson = JSON.stringify(originalChat);
+
+                deletedIdx = await deleteObjFromChatArr(id, originalChat);
+            }
+            resp = await getContext().generateQuietPrompt(value);
+        }
+        catch (error) {
+            console.log(DEBUG_PREFIX, 'ERROR DURING GENERATION, ABORTING AND REVERTING', originalChatJson);
+            if (originalChatJson) {
+                getContext().chat = JSON.parse(originalChatJson);//reverts the chat array to its original state
+            }
+            throw error;
+        }
+
+        if (deletedIdx.length > 0) {
+            //remove the divs equivalent to the chat array objects that were removed earlier
+            await deleteDivsFromChat(deletedIdx, k, id);
+        }
+        return resp;
     }
 }
 
-async function removeOldMessage(id) {
-    console.log(DEBUG_PREFIX, 'REMOVING : ', id);
+async function deleteObjFromChatArr(id, chat) {
+    const deletedIdx = [];
+    const newChat = [];
+    for (var j in chat) {
+        const message = chat[j];
+        if (message.name == id) {
+            deletedIdx.push(j);
+            console.log(DEBUG_PREFIX, 'REMOVING : ', id, j);
+        } else {
+            newChat.push(message);
+        }
+    }
 
-    getContext().chat = removeObjectFromArray(getContext().chat, "name", id);
-    console.log(DEBUG_PREFIX, 'OLD REMOVED MESSAGE', getContext().chat);
-    // eventSource.emit(event_types.MESSAGE_DELETED, getContext().chat.length);
-
-    const mes = $(`#chat .mes[ch_name="${id}"]`).first();
-    if(mes.length){
-        mes.removeClass('mes');
-        mes.css('display', 'none');
-        mes.attr('ch_name', '');
-        mes.prop('ch_name', '');
+    if (deletedIdx.length > 0) {
+        console.log(DEBUG_PREFIX, 'UPDATING NEW CHAT : ', id, chat.length, newChat.length);
+        getContext().chat = newChat;
         await saveChatConditional();
     }
+    return deletedIdx;
 }
 
-function removeObjectFromArray(array, key, value) {
-    const index = array.findIndex(obj => obj[key] === value);
-    if (index == -1) {
-        return array;
+async function deleteDivsFromChat(deletedIdx, k, id) {
+    for (var i in deletedIdx) {
+        const idx = deletedIdx[i];
+        $(`#chat .mes[mesid=${idx}]`).remove();
+        console.log(DEBUG_PREFIX, 'DELETING : ', id, idx);
     }
-    array.splice(index, 1);
-    return removeObjectFromArray(array, key, value);
+
+    const chat = getContext().chat;
+    const divs = $(`#chat .mes`).toArray().reverse();
+    var lastIdx = chat.length - 1;
+    //itterate over the messages on the screen in reverse to update the mesid attribute based on the chat array size
+    for (var j in divs) {
+        const el = $(divs[j]);
+        el.attr('mesid', lastIdx);
+        console.log(DEBUG_PREFIX, 'CORRECTING : ', id, lastIdx);
+        lastIdx = lastIdx - 1;
+    }
+
+    await saveChatConditional();
+    eventSource.emit(event_types.MESSAGE_DELETED, chat.length);
+    $('#chat .mes').removeClass('last_mes');
+    $('#chat .mes').last().addClass('last_mes');
 }
 
 //#############################//
