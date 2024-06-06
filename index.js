@@ -303,7 +303,7 @@ async function deleteObjFromChatArr(id, chat) {
 
     if (deletedIdx.length > 0) {
         console.log(DEBUG_PREFIX, 'UPDATING NEW CHAT : ', id, chat.length, newChat.length);
-        getContext().chat = newChat;
+        getContext().chat.splice(0, getContext().chat.length, ...newChat);
         await saveChatConditional();
     }
     return deletedIdx;
