@@ -121,21 +121,21 @@ async function savePrompt(chatSettings) {
     const templates = $('.state-template-area').toArray();
     for (var k in templates) {
         const value = templates[k].value.trim();
-        if (value) {
+        if ( k < prompts.length && value) {
             prompts[k].template = value;
         }
     }
     const checks = $('.state-issmall-check').toArray();
     for (var k in checks) {
         const value = checks[k].checked;
-        if (value) {
+        if ( k < prompts.length && value) {
             prompts[k].isSmall = value;
         }
     }
     const deletes = $('.state-isdelete-check').toArray();
     for (var k in deletes) {
         const value = deletes[k].checked;
-        if (value) {
+        if ( k < prompts.length && value) {
             prompts[k].isDelete = value;
         }
     }
