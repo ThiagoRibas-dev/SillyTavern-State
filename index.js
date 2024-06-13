@@ -9,7 +9,6 @@ const DEBUG_PREFIX = "<State extension> ";
 
 let CHAR_ID = null;
 let IS_CAN_GEN = false;
-let IS_GENERATING = false;
 
 String.prototype.hashCode = function () {
     var hash = 0,
@@ -27,11 +26,11 @@ String.prototype.hashCode = function () {
 //  Extension UI and Settings  //
 //#############################//
 function loadSettings() {
+    IS_CAN_GEN = false;
     const charId = SillyTavern.getContext().characterId;
     const charName = SillyTavern.getContext().characters[charId].name;
     CHAR_ID = `${charName}(${charId})`;
 
-    IS_CAN_GEN = false;
     console.log(DEBUG_PREFIX, `Loading ${CHAR_ID}`);
 
     const li = $('#state-prompt-set');
@@ -59,8 +58,8 @@ function loadSettings() {
 
     $('#chat').append(btns);
     se.prop('checked', chatSettings.enabled);
-    se.on("click", () => { onEnabledClick(chatSettings) });
-    add.on("click", () => { onAddNew(li, btns, chatSettings); updatePromptButtons(btns, chatSettings); });
+    se.unbind().on("click", () => { onEnabledClick(chatSettings) });
+    add.unbind().on("click", () => { onAddNew(li, btns, chatSettings); updatePromptButtons(btns, chatSettings); });
     lbl.text(`Prompts for character "${CHAR_ID}"`);
 
     const prompts = chatSettings.prompts;
@@ -69,7 +68,9 @@ function loadSettings() {
     }
 
     updatePromptButtons(btns, chatSettings);
-    console.log(DEBUG_PREFIX, 'LOADED', chatSettings)
+    console.log(DEBUG_PREFIX, 'LOADED', chatSettings);
+
+    IS_CAN_GEN = true;
 }
 
 function updatePromptButtons(btns, chatSettings) {
@@ -91,7 +92,7 @@ function getBtn(k, prmpt) {
     const elBtn = $(`<a title="${escapeHtml(value)}" class="api_button menu_button" style="width: fit-content; padding: 0px; margin: 0px;">${vlCount}-${value[0].toUpperCase()}</a>`);
     const divBtn = $(`<div style="border: 1px black solid; border-radius: 4px;"><br></div>`);
     divBtn.append(elBtn);
-    elBtn.on('click', () => {
+    elBtn.unbind().on('click', () => {
         console.log(DEBUG_PREFIX, 'CLICKED', prmpt);
         IS_CAN_GEN = true;
         sendPrompt(prmpt, k);
@@ -121,21 +122,21 @@ async function savePrompt(chatSettings) {
     const templates = $('.state-template-area').toArray();
     for (var k in templates) {
         const value = templates[k].value.trim();
-        if ( k < prompts.length && value) {
+        if (k < prompts.length && value) {
             prompts[k].template = value;
         }
     }
     const checks = $('.state-issmall-check').toArray();
     for (var k in checks) {
         const value = checks[k].checked;
-        if ( k < prompts.length && value) {
+        if (k < prompts.length && value) {
             prompts[k].isSmall = value;
         }
     }
     const deletes = $('.state-isdelete-check').toArray();
     for (var k in deletes) {
         const value = deletes[k].checked;
-        if ( k < prompts.length && value) {
+        if (k < prompts.length && value) {
             prompts[k].isDelete = value;
         }
     }
@@ -172,23 +173,23 @@ async function onAddNew(li, btns, chatSettings, prmpt = { prompt: "", template: 
     deleteCheck.prop('checked', prmpt.isDelete);
     deleteCheck.attr('checked', prmpt.isDelete);
 
-    promptArea.on('change', () => {
+    promptArea.unbind().on('change', () => {
         savePrompt(chatSettings);
         updatePromptButtons(btns, chatSettings);
     });
-    templateArea.on('change', () => {
+    templateArea.unbind().on('change', () => {
         savePrompt(chatSettings);
         updatePromptButtons(btns, chatSettings);
     });
-    smallCheck.on('change', () => {
+    smallCheck.unbind().on('change', () => {
         savePrompt(chatSettings);
         updatePromptButtons(btns, chatSettings);
     });
-    deleteCheck.on('change', () => {
+    deleteCheck.unbind().on('change', () => {
         savePrompt(chatSettings);
         updatePromptButtons(btns, chatSettings);
     });
-    rmvBtn.on('click', () => {
+    rmvBtn.unbind().on('click', () => {
         liEl.remove();
         savePrompt(chatSettings);
         updatePromptButtons(btns, chatSettings);
@@ -205,7 +206,7 @@ async function onAddNew(li, btns, chatSettings, prmpt = { prompt: "", template: 
 }
 
 async function processStateText() {
-    console.debug(DEBUG_PREFIX, 'processStateText', CHAR_ID, IS_CAN_GEN, IS_GENERATING);
+    console.debug(DEBUG_PREFIX, 'processStateText', CHAR_ID, IS_CAN_GEN);
     if (!IS_CAN_GEN) {
         return;
     }
@@ -216,6 +217,7 @@ async function processStateText() {
 
     IS_CAN_GEN = false;
 
+    const originalChatJson = JSON.stringify(getContext().chat);
     try {
         const prompts = extension_settings[MODULE_NAME][CHAR_ID].prompts;
         for (var k in prompts) {
@@ -224,9 +226,14 @@ async function processStateText() {
         }
     } catch (error) {
         toastr.error("State extension: Error during generation.");
-        console.error(DEBUG_PREFIX, error);
+        console.error(DEBUG_PREFIX, 'ERROR DURING GENERATION, ABORTING AND REVERTING', error, originalChatJson);
+        if (originalChatJson) {
+            getContext().chat = JSON.parse(originalChatJson);//reverts the chat array to its original state
+            setLastMesClass();
+        }
     }
-    IS_GENERATING = false;
+
+    IS_CAN_GEN = true;
 }
 
 async function sendPrompt(prmpt, k) {
@@ -239,53 +246,46 @@ async function sendPrompt(prmpt, k) {
         toastr.info(`State Extension. Sending Prompt : ${value.slice(0, 50)}...`);
         console.log(`State Extension. Sending Prompt : ${value} / Template : ${template} / IsSmal : ${prmpt.isSmall}`);
 
-        var resp = await removeAndGenerate(id, value);
-
-        if (template) {
-            resp = template.replace('{{state}}', resp);
-            console.log(DEBUG_PREFIX, 'sendPrompt apply template', resp);
-        }
-        const message = { "name": id, "is_user": false, "is_system": false, "send_date": new Date().toString(), "mes": resp, "extra": { "isSmallSys": prmpt.isSmall } };
-        console.log(DEBUG_PREFIX, 'Adding Message', message);
-
-        getContext().chat.push(message);
-        getContext().addOneMessage(message);
-
-        getContext().chat[getContext().chat.length - 1].state = { idx: k, state: resp };
-        await eventSource.emit(event_types.CHARACTER_MESSAGE_RENDERED, (getContext().chat.length - 1));
-        await saveChatConditional();
-
-        $('#chat .mes').removeClass('last_mes');
-        $('#chat .mes').last().addClass('last_mes');
+        const generatedMessage = await generateRemoveOld(id, value);
+        await addGeneratedMessage(template, generatedMessage, id, prmpt, k);
     }
 
-    async function removeAndGenerate(id, value) {
-        var resp;
-        var originalChatJson;
+    async function generateRemoveOld(id, value) {
+        const generatedMessage = await getContext().generateQuietPrompt(value);
         var deletedIdx = [];
-        try {//we do this in the try block first in order to be able to revert the chat array state in case generateQuietPrompt errors out
-            if (prmpt.isDelete) {
-                const originalChat = getContext().chat;
-                originalChatJson = JSON.stringify(originalChat);
-
-                deletedIdx = await deleteObjFromChatArr(id, originalChat);
-            }
-            resp = await getContext().generateQuietPrompt(value);
+        if (prmpt.isDelete) {
+            const originalChat = getContext().chat;
+            deletedIdx = await deleteObjFromChatArr(id, originalChat);
         }
-        catch (error) {
-            console.log(DEBUG_PREFIX, 'ERROR DURING GENERATION, ABORTING AND REVERTING', originalChatJson);
-            if (originalChatJson) {
-                getContext().chat = JSON.parse(originalChatJson);//reverts the chat array to its original state
-            }
-            throw error;
-        }
-
         if (deletedIdx.length > 0) {
             //remove the divs equivalent to the chat array objects that were removed earlier
-            await deleteDivsFromChat(deletedIdx, k, id);
+            await deleteDivsFromChat(deletedIdx, id);
         }
-        return resp;
+        return generatedMessage;
     }
+}
+
+async function deleteDivsFromChat(deletedIdx, id) {
+    for (var i in deletedIdx) {
+        const idx = deletedIdx[i];
+        $(`#chat .mes[mesid=${idx}]`).remove();
+        console.log(DEBUG_PREFIX, 'DELETING : ', id, idx);
+    }
+
+    const chat = getContext().chat;
+    const divs = $(`#chat .mes`).toArray().reverse();
+    var lastIdx = chat.length - 1;
+    //itterate over the messages displayed on screen in reverse order and update the mesid attribute based on the chat array size
+    for (var j in divs) {
+        const el = $(divs[j]);
+        el.attr('mesid', lastIdx);
+        console.log(DEBUG_PREFIX, 'CORRECTING : ', id, lastIdx);
+        lastIdx = lastIdx - 1;
+    }
+
+    await saveChatConditional();
+    eventSource.emit(event_types.MESSAGE_DELETED, chat.length);
+    setLastMesClass();
 }
 
 async function deleteObjFromChatArr(id, chat) {
@@ -309,26 +309,26 @@ async function deleteObjFromChatArr(id, chat) {
     return deletedIdx;
 }
 
-async function deleteDivsFromChat(deletedIdx, k, id) {
-    for (var i in deletedIdx) {
-        const idx = deletedIdx[i];
-        $(`#chat .mes[mesid=${idx}]`).remove();
-        console.log(DEBUG_PREFIX, 'DELETING : ', id, idx);
+async function addGeneratedMessage(template, generatedMessage, id, prmpt, k) {
+    if (template) {
+        generatedMessage = template.replace('{{state}}', generatedMessage);
+        console.log(DEBUG_PREFIX, 'sendPrompt apply template', generatedMessage);
     }
+    const message = { "name": id, "is_user": false, "is_system": false, "send_date": new Date().toString(), "mes": generatedMessage, "extra": { "isSmallSys": prmpt.isSmall } };
+    console.log(DEBUG_PREFIX, 'Adding Message', message);
 
-    const chat = getContext().chat;
-    const divs = $(`#chat .mes`).toArray().reverse();
-    var lastIdx = chat.length - 1;
-    //itterate over the messages on the screen in reverse to update the mesid attribute based on the chat array size
-    for (var j in divs) {
-        const el = $(divs[j]);
-        el.attr('mesid', lastIdx);
-        console.log(DEBUG_PREFIX, 'CORRECTING : ', id, lastIdx);
-        lastIdx = lastIdx - 1;
-    }
+    getContext().chat.push(message);
+    getContext().addOneMessage(message);
 
+    getContext().chat[getContext().chat.length - 1].state = { idx: k, state: generatedMessage };
+    await eventSource.emit(event_types.CHARACTER_MESSAGE_RENDERED, (getContext().chat.length - 1));
     await saveChatConditional();
-    eventSource.emit(event_types.MESSAGE_DELETED, chat.length);
+
+    setLastMesClass();
+    return generatedMessage;
+}
+
+function setLastMesClass() {
     $('#chat .mes').removeClass('last_mes');
     $('#chat .mes').last().addClass('last_mes');
 }
@@ -341,10 +341,25 @@ jQuery(async () => {
     const windowHtml = $(await $.get(`${EXTENSION_FOLDER_PATH}/window.html`));
     $('#extensions_settings').append(windowHtml);
 
+    var timeout;
+    const loadSettingsTimeout = () => {
+        clearTimeout(timeout);
+        IS_CAN_GEN = false;
+        timeout = setTimeout(loadSettings, 1000);
+    }
+
+    const genTimeout = () => {
+        clearTimeout(timeout);
+        IS_CAN_GEN = true;
+        timeout = setTimeout(processStateText, 500);
+    }
+
+    const canGenTrue = () => { IS_CAN_GEN = true };
+
     //IS_CAN_GEN is used to ensure that the prompts won't be triggered when changing chats or characters, since that somehow triggers the MESSAGE_RECEIVED event, which is odd in my opnion
-    eventSource.on(event_types.GENERATION_ENDED, () => { IS_CAN_GEN = true });
-    eventSource.on(event_types.GENERATION_STOPPED, () => { IS_CAN_GEN = true });
-    eventSource.on(event_types.MESSAGE_DELETED, () => { setTimeout(loadSettings, 1000) });
-    eventSource.on(event_types.CHAT_CHANGED, () => { setTimeout(loadSettings, 1000) });
-    eventSource.on(event_types.MESSAGE_RECEIVED, () => { setTimeout(() => { processStateText() }, 500); });
+    eventSource.on(event_types.GENERATION_ENDED, canGenTrue);
+    eventSource.on(event_types.GENERATION_STOPPED, canGenTrue);
+    eventSource.on(event_types.MESSAGE_DELETED, loadSettingsTimeout);
+    eventSource.on(event_types.CHAT_CHANGED, loadSettingsTimeout);
+    eventSource.on(event_types.MESSAGE_RECEIVED, genTimeout);
 });

@@ -11,4 +11,5 @@ TODO:
  - ~~Add a "mini prompt" checkbox to the UI to decide how the result of a given prompt is shown in the chat history (mini response or full resposnse)~~(DONE);
  - ~~Add an option to make the result of a prompt unique in the chat, as in, before adding a new result, the previous one will be removed~~(DONE)[FIXED!];
  - Implement a keyword system, where the User can assign keywords to each prompt and those prompts will only trigger in case the last N messages contain said keywords (like a lorebook);
+ - Add a field for custom GNBF Grammar for each prompt;
  - Fix the UI;
