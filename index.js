@@ -77,6 +77,11 @@ function updatePromptButtons(btns, chatSettings) {
     btns.empty();
     const statePrompts = chatSettings.prompts;
     console.log(DEBUG_PREFIX, 'Updating prompt btns.', statePrompts)
+    if (statePrompts.length == 0) {
+        return;
+    }
+
+    btns.append(getBtnAll());
     for (var k in statePrompts) {
         const prmpt = statePrompts[k];
         if (prmpt && prmpt.prompt) {
@@ -84,6 +89,18 @@ function updatePromptButtons(btns, chatSettings) {
             btns.append(divBtn);
         }
     }
+}
+
+function getBtnAll() {
+    const elBtn = $(`<a title="Trigger all state prompts, in order." class="api_button menu_button" style="width: fit-content; padding: 0px; margin: 0px;">All</a>`);
+    const divBtn = $(`<div style="border: 1px black solid; border-radius: 4px;"><br></div>`);
+    divBtn.append(elBtn);
+    elBtn.unbind().on('click', () => {
+        console.log(DEBUG_PREFIX, 'CLICKED ALL');
+        IS_CAN_GEN = true;
+        processStateText();
+    });
+    return divBtn;
 }
 
 function getBtn(k, prmpt) {
