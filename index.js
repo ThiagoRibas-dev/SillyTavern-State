@@ -268,7 +268,7 @@ async function sendPrompt(prmpt, k) {
     }
 
     async function generateRemoveOld(id, value) {
-        const generatedMessage = await getContext().generateQuietPrompt(value);
+        const generatedMessage = await getContext().generateQuietPrompt(value, true);
         var deletedIdx = [];
         if (prmpt.isDelete) {
             const originalChat = getContext().chat;
