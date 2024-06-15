@@ -6,7 +6,7 @@
     "js": "index.js",
     "css": "style.css",
     "author": "Triago",
-    "version": "1.1.5",
+    "version": "1.1.6",
     "homePage": "https://github.com/ThiagoRibas-dev/SillyTavern-State",
     "auto_update": true
 }

@@ -69,7 +69,7 @@ function loadSettings() {
 
     updatePromptButtons(btns, chatSettings);
     console.log(DEBUG_PREFIX, 'LOADED', chatSettings);
-
+    setCollapsable();
     IS_CAN_GEN = true;
 }
 
@@ -353,7 +353,25 @@ async function addGeneratedMessage(template, generatedMessage, id, prmpt, k) {
     await saveChatConditional();
 
     setLastMesClass();
+    setCollapsable();
     return generatedMessage;
+}
+
+function setCollapsable() {
+    $('div.mes.smallSysMes div.mes_block div.mes_text').each((idx, el) => {
+        const html = el.innerHTML;
+        if (html.indexOf('<details>') < 0) {
+            const name = el.parentElement?.parentElement?.getAttribute('ch_name');
+
+            var newHtml = '<details>';
+            if(name){
+                newHtml += '<summary>' + name + '</summary>'
+            }
+            newHtml += html + '</details>';
+
+            el.innerHTML = newHtml;
+        }
+    });
 }
 
 function setLastMesClass() {
