@@ -95,10 +95,9 @@ function getBtnAll() {
     const elBtn = $(`<a title="Trigger all state prompts, in order." class="api_button menu_button" style="width: fit-content; padding: 0px; margin: 0px;">All</a>`);
     const divBtn = $(`<div style="border: 1px black solid; border-radius: 4px;"><br></div>`);
     divBtn.append(elBtn);
-    elBtn.unbind().on('click', () => {
+    elBtn.unbind().on('click', async () => {
         console.log(DEBUG_PREFIX, 'CLICKED ALL');
-        IS_CAN_GEN = true;
-        processStateText();
+        await processStateText();
     });
     return divBtn;
 }
@@ -109,10 +108,22 @@ function getBtn(k, prmpt) {
     const elBtn = $(`<a title="${escapeHtml(value)}" class="api_button menu_button" style="width: fit-content; padding: 0px; margin: 0px;">${vlCount}-${value[0].toUpperCase()}</a>`);
     const divBtn = $(`<div style="border: 1px black solid; border-radius: 4px;"><br></div>`);
     divBtn.append(elBtn);
-    elBtn.unbind().on('click', () => {
-        console.log(DEBUG_PREFIX, 'CLICKED', prmpt);
+    elBtn.unbind().on('click', async () => {
+        console.log(DEBUG_PREFIX, 'CLICKED', k, prmpt);
+        IS_CAN_GEN = false;
+        const originalChatJson = JSON.stringify(getContext().chat);
+        try {
+            await sendPrompt(prmpt, k);
+        } catch (error) {
+            toastr.error("State extension: Error during generation.");
+            console.error(DEBUG_PREFIX, 'ERROR DURING GENERATION, ABORTING AND REVERTING', error, originalChatJson);
+            if (originalChatJson) {
+                getContext().chat = JSON.parse(originalChatJson);//reverts the chat array to its original state
+                setLastMesClass();
+            }
+        }
+
         IS_CAN_GEN = true;
-        sendPrompt(prmpt, k);
     });
     return divBtn;
 }
