@@ -27,8 +27,8 @@ String.prototype.hashCode = function () {
 //#############################//
 function loadSettings() {
     IS_CAN_GEN = false;
-    const charId = SillyTavern.getContext().characterId;
-    const charName = SillyTavern.getContext().characters[charId].name;
+    const charId = getContext().characterId;
+    const charName = getContext().characters[charId].name;
     CHAR_ID = `${charName}(${charId})`;
 
     console.log(DEBUG_PREFIX, `Loading ${CHAR_ID}`);
@@ -395,8 +395,10 @@ jQuery(async () => {
     }
 
     const genTimeout = () => {
+        if(!IS_CAN_GEN){
+            return;
+        }
         clearTimeout(timeout);
-        IS_CAN_GEN = true;
         timeout = setTimeout(processStateText, 500);
     }
 
@@ -405,7 +407,6 @@ jQuery(async () => {
     //IS_CAN_GEN is used to ensure that the prompts won't be triggered when changing chats or characters, since that somehow triggers the MESSAGE_RECEIVED event, which is odd in my opnion
     eventSource.on(event_types.GENERATION_ENDED, canGenTrue);
     eventSource.on(event_types.GENERATION_STOPPED, canGenTrue);
-    eventSource.on(event_types.MESSAGE_DELETED, loadSettingsTimeout);
     eventSource.on(event_types.CHAT_CHANGED, loadSettingsTimeout);
     eventSource.on(event_types.MESSAGE_RECEIVED, genTimeout);
 });
