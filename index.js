@@ -26,6 +26,7 @@ String.prototype.hashCode = function () {
 //  Extension UI and Settings  //
 //#############################//
 function loadSettings() {
+    console.log(DEBUG_PREFIX, 'MODULE_NAME', extension_settings, MODULE_NAME, CHAR_ID)
     IS_CAN_GEN = false;
     const charId = getContext().characterId;
     const charName = getContext().characters[charId].name;
@@ -42,6 +43,11 @@ function loadSettings() {
     li.html('');
     se.prop('checked', false);
     lbl.empty();
+
+    if (!extension_settings[MODULE_NAME]) {
+        extension_settings[MODULE_NAME] = {}
+    }
+
     if (!extension_settings[MODULE_NAME][CHAR_ID]) {
         extension_settings[MODULE_NAME][CHAR_ID] = {
             enabled: false,
@@ -364,7 +370,7 @@ function setCollapsable() {
             const name = el.parentElement?.parentElement?.getAttribute('ch_name');
 
             var newHtml = '<details>';
-            if(name){
+            if (name) {
                 newHtml += '<summary>' + name + '</summary>'
             }
             newHtml += html + '</details>';
@@ -395,7 +401,7 @@ jQuery(async () => {
     }
 
     const genTimeout = () => {
-        if(!IS_CAN_GEN){
+        if (!IS_CAN_GEN) {
             return;
         }
         clearTimeout(timeout);
