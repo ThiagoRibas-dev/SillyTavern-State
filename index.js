@@ -405,7 +405,7 @@ function setCollapsable() {
 
             var newHtml = `<details ${isCollapsed(name, prompts)} >`;
             if (name) {
-                newHtml += '<summary>' + name + '</summary>'
+                newHtml += `<summary title="${escapeHtml(html)}">${name}</summary>`;
             }
             newHtml += html + '</details>';
 
