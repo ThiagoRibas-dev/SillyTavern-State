@@ -174,6 +174,13 @@ async function savePrompt(chatSettings) {
             prompts[k].isDelete = value;
         }
     }
+    const collapsed = $('.state-iscollapsed-check').toArray();
+    for (var k in collapsed) {
+        const value = collapsed[k].checked;
+        if (k < prompts.length && value) {
+            prompts[k].isCollapsed = value;
+        }
+    }
 
     chatSettings.prompts = prompts;
     console.log(DEBUG_PREFIX, 'SAVED', chatSettings);
@@ -184,20 +191,24 @@ function escapeHtml(unsafe) {
     return unsafe.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;');
 }
 
-async function onAddNew(li, btns, chatSettings, prmpt = { prompt: "", template: "{{state}}", isSmall: true, isDelete: true }) {
+async function onAddNew(li, btns, chatSettings, prmpt = { prompt: "", template: "{{state}}", isSmall: true, isDelete: true, isCollapsed: true }) {
     console.log(DEBUG_PREFIX, 'ADD NEW', prmpt);
     const els = li.children()?.length || 0;
     const prmptTitle = "Prompt sent to probe the current state";
     const templTitle = "Template of the message that will be added. The placeholder {{state}} will be replaced with the Ai's response.";
     const smallTitle = 'If checked, the reply to the sent prompt will be added as a "small system message" instead of a full chat message.';
     const deleteTitle = 'If checked, previous states will be removed from the chat before a new one is inserted. Useful to not have older, outdated information pulluting the chat.';
+    const collapsedTitle = 'If checked, the state messages will be hidden/folded in order to make the chat more readable.';
 
     const promptArea = $(`<textarea class="state-prompt-area" placeholder="(${prmptTitle})" title="${prmptTitle.replace("\"", "")}" class="text_pole widthUnset flex1" rows="2">${prmpt.prompt}</textarea>`);
     const templateArea = $(`<textarea class="state-template-area" placeholder="(${templTitle})" title="${templTitle.replace("\"", "")}" class="text_pole widthUnset flex1" rows="2">${prmpt.template}</textarea>`);
     const smallCheck = $(`<input type="checkbox" class="state-issmall-check" title="${smallTitle.replace("\"", "")}" name="is_small${els}" ${prmpt.isSmall ? "checked" : ""}/>`);
     const smallCheckLbl = $(`<label class="checkbox_label" for="is_small${els}"><small>Is Small Reply?</small></label>`);
     const deleteCheck = $(`<input type="checkbox" class="state-isdelete-check" title="${deleteTitle.replace("\"", "")}" name="is_delete${els}" ${prmpt.isDelete ? "checked" : ""}/>`);
-    const deleteCheckLbl = $(`<label title="If checked, keep only the latest reply to this prompt, removing past replies." class="checkbox_label" for="is_delete${els}"><small>Exclusive state</small></label>`);
+    const deleteCheckLbl = $(`<label title="${deleteTitle.replace("\"", "")}" for="is_delete${els}"><small>Exclusive state</small></label>`);
+
+    const collapsedCheck = $(`<input type="checkbox" class="state-iscollapsed-check" title="${collapsedTitle.replace("\"", "")}" name="is_collapsed${els}" ${prmpt.isCollapsed ? "checked" : ""}/>`);
+    const collapsedCheckLbl = $(`<label title="${collapsedTitle.replace("\"", "")}" class="checkbox_label" for="is_collapsed${els}"><small>Collapse State</small></label>`);
 
     const rmvBtn = $(`<div class="menu_button menu_button_icon fa-solid fa-trash-can redWarningBG" title="Remove"></div>`);
     const liEl = $(`<li style="width: 100%; border: 1px grey solid; border-radius: 2px; margin-botom: 2px;" ></li>`)
@@ -206,6 +217,8 @@ async function onAddNew(li, btns, chatSettings, prmpt = { prompt: "", template: 
     smallCheck.attr('checked', prmpt.isSmall);
     deleteCheck.prop('checked', prmpt.isDelete);
     deleteCheck.attr('checked', prmpt.isDelete);
+    collapsedCheck.prop('checked', prmpt.isCollapsed);
+    collapsedCheck.attr('checked', prmpt.isCollapsed);
 
     promptArea.unbind().on('change', () => {
         savePrompt(chatSettings);
@@ -223,6 +236,17 @@ async function onAddNew(li, btns, chatSettings, prmpt = { prompt: "", template: 
         savePrompt(chatSettings);
         updatePromptButtons(btns, chatSettings);
     });
+    collapsedCheck.unbind().on('change', (ev) => {
+        savePrompt(chatSettings);
+        updatePromptButtons(btns, chatSettings);
+        $('div.mes.smallSysMes div.mes_block div.mes_text details').each((idx, el) => {
+            const parent = el.parentElement?.parentElement?.parentElement;
+            const name = parent.getAttribute('ch_name');
+            if(name == `State ${els}`){
+                el.open = !ev.target.checked
+            }
+        });
+    });
     rmvBtn.unbind().on('click', () => {
         liEl.remove();
         savePrompt(chatSettings);
@@ -231,10 +255,16 @@ async function onAddNew(li, btns, chatSettings, prmpt = { prompt: "", template: 
 
     liEl.append(promptArea);
     liEl.append(templateArea);
+
     smallCheckLbl.append(smallCheck);
     liEl.append(smallCheckLbl);
+
     deleteCheckLbl.append(deleteCheck);
     liEl.append(deleteCheckLbl);
+
+    collapsedCheckLbl.append(collapsedCheck);
+    liEl.append(collapsedCheckLbl);
+
     liEl.append(rmvBtn);
     li.append(liEl);
 }
@@ -364,12 +394,16 @@ async function addGeneratedMessage(template, generatedMessage, id, prmpt, k) {
 }
 
 function setCollapsable() {
+    const prompts = extension_settings[MODULE_NAME][CHAR_ID].prompts;
     $('div.mes.smallSysMes div.mes_block div.mes_text').each((idx, el) => {
         const html = el.innerHTML;
         if (html.indexOf('<details>') < 0) {
-            const name = el.parentElement?.parentElement?.getAttribute('ch_name');
+            const parent = el.parentElement?.parentElement;
+            const name = parent.getAttribute('ch_name');
+            const id = name.replace('State ', '');
+            const isCollapsed = !prompts[id].isCollapsed ? ' open="true" ' : '';
 
-            var newHtml = '<details>';
+            var newHtml = `<details ${isCollapsed} >`;
             if (name) {
                 newHtml += '<summary>' + name + '</summary>'
             }
