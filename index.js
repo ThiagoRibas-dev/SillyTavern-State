@@ -242,7 +242,7 @@ async function onAddNew(li, btns, chatSettings, prmpt = { prompt: "", template: 
         $('div.mes.smallSysMes div.mes_block div.mes_text details').each((idx, el) => {
             const parent = el.parentElement?.parentElement?.parentElement;
             const name = parent.getAttribute('ch_name');
-            if(name == `State ${els}`){
+            if (name == `State ${els}`) {
                 el.open = !ev.target.checked
             }
         });
@@ -400,10 +400,8 @@ function setCollapsable() {
         if (html.indexOf('<details>') < 0) {
             const parent = el.parentElement?.parentElement;
             const name = parent.getAttribute('ch_name');
-            const id = name.replace('State ', '');
-            const isCollapsed = !prompts[id].isCollapsed ? ' open="true" ' : '';
 
-            var newHtml = `<details ${isCollapsed} >`;
+            var newHtml = `<details ${isCollapsed(name, prompts)} >`;
             if (name) {
                 newHtml += '<summary>' + name + '</summary>'
             }
@@ -412,6 +410,14 @@ function setCollapsable() {
             el.innerHTML = newHtml;
         }
     });
+}
+
+function isCollapsed(name, prompts) {
+    const id = name.replace('State ', '');
+    if (id && prompts[id]) {
+        return !prompts[id].isCollapsed ? ' open="true" ' : '';
+    }
+    return '';
 }
 
 function setLastMesClass() {
