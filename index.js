@@ -130,6 +130,7 @@ function getBtn(k, prmpt) {
         }
 
         IS_CAN_GEN = true;
+        setCollapsable();
     });
     return divBtn;
 }
@@ -298,6 +299,7 @@ async function processStateText() {
     }
 
     IS_CAN_GEN = true;
+    setCollapsable();
 }
 
 async function sendPrompt(prmpt, k) {
@@ -389,12 +391,12 @@ async function addGeneratedMessage(template, generatedMessage, id, prmpt, k) {
     await saveChatConditional();
 
     setLastMesClass();
-    setCollapsable();
     return generatedMessage;
 }
 
 function setCollapsable() {
-    const prompts = extension_settings[MODULE_NAME][CHAR_ID].prompts;
+    try {
+        const prompts = extension_settings[MODULE_NAME][CHAR_ID].prompts;
     $('div.mes.smallSysMes div.mes_block div.mes_text').each((idx, el) => {
         const html = el.innerHTML;
         if (html.indexOf('<details>') < 0) {
@@ -410,6 +412,9 @@ function setCollapsable() {
             el.innerHTML = newHtml;
         }
     });
+    } catch (error) {
+        console.error(DEBUG_PREFIX, 'Error setting collapsables', error);
+    }
 }
 
 function isCollapsed(name, prompts) {
