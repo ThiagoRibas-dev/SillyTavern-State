@@ -399,7 +399,7 @@ function setCollapsable() {
         const prompts = extension_settings[MODULE_NAME][CHAR_ID].prompts;
     $('div.mes.smallSysMes div.mes_block div.mes_text').each((idx, el) => {
         const html = el.innerHTML;
-        if (html.indexOf('<details>') < 0) {
+        if (html.indexOf('<details') < 0) {
             const parent = el.parentElement?.parentElement;
             const name = parent.getAttribute('ch_name');
 
