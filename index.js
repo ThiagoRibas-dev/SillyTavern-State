@@ -35,7 +35,7 @@ function loadSettings() {
     console.log(DEBUG_PREFIX, `Loading ${CHAR_ID}`);
 
     const li = $('#state-prompt-set');
-    const se = $("#state_enabled");
+    const se = $(".state_enabled");
     const add = $("#sp--set-new");
     const lbl = $('#state_label_current_chat');
 
@@ -64,7 +64,7 @@ function loadSettings() {
 
     $('#chat').append(btns);
     se.prop('checked', chatSettings.enabled);
-    se.unbind().on("click", () => { onEnabledClick(chatSettings) });
+    se.unbind().on("click", (ev) => { clickIsEnabled(ev, chatSettings); });
     add.unbind().on("click", () => { onAddNew(li, btns, chatSettings); updatePromptButtons(btns, chatSettings); });
     lbl.text(`Prompts for character "${CHAR_ID}"`);
 
@@ -79,6 +79,13 @@ function loadSettings() {
     IS_CAN_GEN = true;
 }
 
+function clickIsEnabled(ev, chatSettings) {
+    const se = $(".state_enabled");
+    se.attr('checked', ev.target.checked);
+    se.prop('checked', ev.target.checked);
+    onEnabledClick(chatSettings);
+}
+
 function updatePromptButtons(btns, chatSettings) {
     btns.empty();
     const statePrompts = chatSettings.prompts;
@@ -87,6 +94,7 @@ function updatePromptButtons(btns, chatSettings) {
         return;
     }
 
+    btns.append(getCheckEnable());
     btns.append(getBtnAll());
     for (var k in statePrompts) {
         const prmpt = statePrompts[k];
@@ -95,6 +103,13 @@ function updatePromptButtons(btns, chatSettings) {
             btns.append(divBtn);
         }
     }
+}
+
+function getCheckEnable() {
+    const chatSettings = extension_settings[MODULE_NAME][CHAR_ID];
+    const se = $(".state_enabled").clone();
+    se.unbind().on("click", (ev) => { clickIsEnabled(ev, chatSettings); });
+    return se;
 }
 
 function getBtnAll() {
@@ -136,7 +151,7 @@ function getBtn(k, prmpt) {
 }
 
 async function onEnabledClick(chatSettings) {
-    chatSettings.enabled = $('#state_enabled').is(':checked');
+    chatSettings.enabled = $('.state_enabled').is(':checked');
     saveSettingsDebounced();
 }
 
@@ -397,21 +412,21 @@ async function addGeneratedMessage(template, generatedMessage, id, prmpt, k) {
 function setCollapsable() {
     try {
         const prompts = extension_settings[MODULE_NAME][CHAR_ID].prompts;
-    $('div.mes.smallSysMes div.mes_block div.mes_text').each((idx, el) => {
-        const html = el.innerHTML;
-        if (html.indexOf('<details') < 0) {
-            const parent = el.parentElement?.parentElement;
-            const name = parent.getAttribute('ch_name');
+        $('div.mes.smallSysMes div.mes_block div.mes_text').each((idx, el) => {
+            const html = el.innerHTML;
+            if (html.indexOf('<details') < 0) {
+                const parent = el.parentElement?.parentElement;
+                const name = parent.getAttribute('ch_name');
 
-            var newHtml = `<details ${isCollapsed(name, prompts)} >`;
-            if (name) {
-                newHtml += `<summary title="${escapeHtml(html)}">${name}</summary>`;
+                var newHtml = `<details ${isCollapsed(name, prompts)} >`;
+                if (name) {
+                    newHtml += `<summary title="${escapeHtml(html)}">${name}</summary>`;
+                }
+                newHtml += html + '</details>';
+
+                el.innerHTML = newHtml;
             }
-            newHtml += html + '</details>';
-
-            el.innerHTML = newHtml;
-        }
-    });
+        });
     } catch (error) {
         console.error(DEBUG_PREFIX, 'Error setting collapsables', error);
     }
