@@ -107,7 +107,7 @@ function updatePromptButtons(btns, chatSettings) {
 
 function getCheckEnable() {
     const chatSettings = extension_settings[MODULE_NAME][CHAR_ID];
-    const se = $(".state_enabled").clone();
+    const se = $(".state_enabled").first().clone();
     se.unbind().on("click", (ev) => { clickIsEnabled(ev, chatSettings); });
     return se;
 }
@@ -474,5 +474,6 @@ jQuery(async () => {
     eventSource.on(event_types.GENERATION_ENDED, canGenTrue);
     eventSource.on(event_types.GENERATION_STOPPED, canGenTrue);
     eventSource.on(event_types.CHAT_CHANGED, loadSettingsTimeout);
+    eventSource.on(event_types.MESSAGE_DELETED, loadSettingsTimeout);
     eventSource.on(event_types.MESSAGE_RECEIVED, genTimeout);
 });
