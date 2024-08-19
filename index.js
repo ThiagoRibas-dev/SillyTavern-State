@@ -26,12 +26,13 @@ String.prototype.hashCode = function () {
 //  Extension UI and Settings  //
 //#############################//
 function loadSettings() {
-    console.log(DEBUG_PREFIX, 'MODULE_NAME', extension_settings, MODULE_NAME, CHAR_ID)
     IS_CAN_GEN = false;
     const charId = getContext().characterId;
     const charName = getContext().characters[charId].name;
-    CHAR_ID = `${charName}(${charId})`;
-
+    const createDate = getContext().characters[charId].create_date
+    CHAR_ID = `${charName}-${createDate}`;
+    
+    console.log(DEBUG_PREFIX, 'MODULE_NAME', extension_settings, MODULE_NAME, CHAR_ID)
     console.log(DEBUG_PREFIX, `Loading ${CHAR_ID}`);
 
     const li = $('#state-prompt-set');
@@ -66,7 +67,7 @@ function loadSettings() {
     se.prop('checked', chatSettings.enabled);
     se.unbind().on("click", (ev) => { clickIsEnabled(ev, chatSettings); });
     add.unbind().on("click", () => { onAddNew(li, btns, chatSettings); updatePromptButtons(btns, chatSettings); });
-    lbl.text(`Prompts for character "${CHAR_ID}"`);
+    lbl.text(`Prompts for character "${charName}"`);
 
     const prompts = chatSettings.prompts;
     for (var k in prompts) {
