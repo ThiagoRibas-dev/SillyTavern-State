@@ -44,6 +44,7 @@ function loadSettings() {
     li.html('');
     se.prop('checked', false);
     lbl.empty();
+    $('#sp_container').remove();
 
     if (!extension_settings[MODULE_NAME]) {
         extension_settings[MODULE_NAME] = {}
