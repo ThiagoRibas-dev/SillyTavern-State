@@ -62,9 +62,9 @@ function loadSettings() {
     }
 
     const chatSettings = extension_settings[MODULE_NAME][CHAR_ID];
-    const btns = $(`<span id="sp_container" style="z-index: 99999; /*background: red;*/ position:sticky; bottom: 0; margin-bottom: 5vh; margin-left: 0.5vh;"></span>`)
+    const btns = $(`<span id="sp_container" style="z-index: 99999; /*background: red;*/ position:fixed; bottom: 0; margin-bottom: 5vh; margin-left: 0.5vh;"></span>`)
 
-    $('#chat').append(btns);
+    $('#sheld').append(btns);
     se.prop('checked', chatSettings.enabled);
     se.unbind().on("click", (ev) => { clickIsEnabled(ev, chatSettings); });
     add.unbind().on("click", () => { onAddNew(li, btns, chatSettings); updatePromptButtons(btns, chatSettings); });
